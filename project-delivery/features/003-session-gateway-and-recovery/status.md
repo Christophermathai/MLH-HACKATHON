@@ -13,7 +13,7 @@ Owner: Backend developer
 | Phase | Status | Evidence | Depends on |
 | --- | --- | --- | --- |
 | P1: Build identity and state service | COMPLETED | `npm run test --workspace=@zoomout/api` passing. Validated room creation, token hashing, atomic B claim, independent side transitions, and immutable confirmation. | 002 |
-| P2: Gate and route generation | NOT_STARTED | None | P1 |
+| P2: Gate and route generation | COMPLETED | `npm run test --workspace=@zoomout/api` passing (16/16). Validated exactly-once pipeline orchestration, safety trigger diversion, participant isolation projections, and privacy assertions. | P1 |
 | P3: Recover and clean up | NOT_STARTED | None | P2 |
 
 ## Next action

@@ -163,6 +163,10 @@ export class SessionStore {
       );
     }
 
+    if (session.states[side] !== "REVIEW") {
+      transitionParticipant(session, side, "REVIEW");
+    }
+
     transitionParticipant(session, side, "READY");
 
     session.confirmedText[side] = trimmed;

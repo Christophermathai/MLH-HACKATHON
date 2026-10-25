@@ -27,7 +27,21 @@ The in-memory design cannot recover after process restart. Exactly-once orchestr
 - Verification checks:
   - `npm run test --workspace=@zoomout/api`: 14/14 tests passing.
 - Deviations: None.
-- Remaining work: P2 (Gate and route generation), P3 (Recover and clean up).
+- Remaining work: P3 (Recover and clean up).
+
+### 2026-10-25: Phase 2 (Gate and route generation)
+- Files created/modified:
+  - `app/api/src/transport/projections.ts`: Projection helpers `projectSnapshot`, `sendToSide`, and `broadcast`. `projectSnapshot` guarantees participant isolation and ensures raw transcripts and private analyst JSON are never exposed.
+  - `app/api/src/sessions/orchestrator.ts`: `PipelineOrchestrator` managing per-side background analysis upon confirmation, both-ready gating, exactly-once generation guard (`session.generationId`), safety trigger branching (skipping playful verdict for generic safety notice), mediator execution, judge streaming, and bounded concurrency (max 2) sentence-level TTS synthesis with audio caching.
+  - `app/api/src/sessions/orchestrator.test.ts`: Tests validating AC-003-04 and AC-003-05.
+- Requirements and Acceptance criteria:
+  - FR-003-04 / AC-003-04: Mediation and judging are gated until both confirmations and both analyst runs complete. Exactly one generationId and one pipeline run are created even under concurrent callbacks. Serious safety flags abort playful mediation and emit generic calm safety result with 0 audio clips.
+  - FR-003-05 / AC-003-05: Strict projection verified before and after consent. Neither participant snapshot nor outbound broadcast contains the other side's raw transcript or private analyst notes.
+  - EC-003-01: When one side confirms, only own-side analyst runs; shared mediation stays strictly gated.
+- Verification checks:
+  - `npm run test --workspace=@zoomout/api`: 16/16 tests passing.
+- Deviations: None.
+- Remaining work: P3 (Recover and clean up).
 
 ## Resume pointer
 
