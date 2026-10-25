@@ -490,6 +490,9 @@ export function createGatewayServer(
             boundRoom.sockets.A?.send(bothReadyMsg);
             boundRoom.sockets.B?.send(bothReadyMsg);
 
+            broadcastSnapshots(boundRoom);
+            console.log(`[ZoomOut Gateway] Both participants confirmed for room ${boundRoom.room}. Triggering orchestration pipeline...`);
+
             // Execute pipeline asynchronously
             runOrchestrationPipeline(boundRoom, providers).catch((err) => {
               console.error("[ZoomOut Orchestrator] Pipeline failed:", err);

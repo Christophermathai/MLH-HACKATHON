@@ -470,8 +470,10 @@ export function SessionView({
 
   // Active Session Navigation
   const isPostConsent =
+    sessionState === "BOTH_READY" ||
     sessionState === "MEDIATING" ||
     sessionState === "JUDGING" ||
+    sessionState === "RESOLVED" ||
     sessionState === "DONE" ||
     mediatorResult !== null ||
     verdictText.length > 0 ||
@@ -510,9 +512,10 @@ export function SessionView({
         </div>
       </header>
 
-      {!isConnected && connectionError && (
-        <aside className="bg-amber-500/10 border-b border-amber-500/20 py-2 px-6 text-xs text-amber-700 dark:text-amber-300 text-center font-medium">
-          {connectionError}
+      {connectionError && (
+        <aside className="bg-amber-500/10 border-b border-amber-500/20 py-2.5 px-6 text-xs text-amber-700 dark:text-amber-300 text-center font-medium flex items-center justify-center gap-2">
+          <span>⚠️</span>
+          <span>{connectionError}</span>
         </aside>
       )}
 

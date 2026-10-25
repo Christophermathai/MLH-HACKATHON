@@ -106,6 +106,22 @@ export function VerdictScreen({
   }, [audioChunks.size]);
 
   const togglePlayPause = () => {
+    if (audioChunks.size === 0 && verdictText && typeof window !== "undefined" && "speechSynthesis" in window) {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        setIsPlaying(false);
+      } else {
+        const utterance = new SpeechSynthesisUtterance(verdictText);
+        utterance.lang = "ml-IN";
+        utterance.rate = 0.95;
+        utterance.onend = () => setIsPlaying(false);
+        utterance.onerror = () => setIsPlaying(false);
+        window.speechSynthesis.speak(utterance);
+        setIsPlaying(true);
+      }
+      return;
+    }
+
     if (isPlaying && audioRef.current) {
       audioRef.current.pause();
       setIsPlaying(false);
@@ -221,12 +237,14 @@ export function VerdictScreen({
                 ? `Playing sentence ${(currentSeq ?? 0) + 1} of ${audioManifest?.totalSentences || audioChunks.size}...`
                 : audioChunks.size > 0
                 ? "Audio ready to play"
-                : "Awaiting audio generation..."}
+                : verdictText
+                ? "Tap to read verdict aloud"
+                : "Awaiting court deliberation..."}
             </p>
           </div>
         </div>
 
-        {audioChunks.size > 0 && (
+        {audioChunks.size > 0 ? (
           <button
             type="button"
             onClick={handleFullReplay}
@@ -234,12 +252,39 @@ export function VerdictScreen({
           >
             Replay Full Verdict
           </button>
-        )}
+        ) : verdictText && typeof window !== "undefined" && "speechSynthesis" in window ? (
+          <button
+            type="button"
+            onClick={togglePlayPause}
+            className="text-xs px-3 py-1.5 border rounded-lg bg-background hover:bg-muted font-medium transition"
+          >
+            {isPlaying ? "⏹ Stop Voice" : "🔊 Browser Voice"}
+          </button>
+        ) : null}
       </div>
 
       {audioError && (
         <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-700 dark:text-amber-300">
           {audioError} (The verdict text remains fully readable below.)
+        </div>
+      )}
+
+      {/* Deliberation In Progress */}
+      {!mediatorResult && !verdictText && (
+        <div className="p-8 border border-dashed rounded-2xl bg-card/60 text-center space-y-4">
+          <div className="w-14 h-14 mx-auto rounded-full bg-primary/10 text-primary flex items-center justify-center text-2xl animate-pulse">
+            ⚖️
+          </div>
+          <div>
+            <h3 className="text-xl font-bold tracking-tight">Court is Now in Session</h3>
+            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+              The AI Judge and Mediator are reviewing both testimonies, evaluating perspectives, and formulating the spoken Malayalam ruling. This takes about 10–15 seconds...
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-2 text-xs font-semibold text-primary pt-1">
+            <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+            <span>Deliberating testimonies...</span>
+          </div>
         </div>
       )}
 

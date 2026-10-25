@@ -14,10 +14,91 @@ import {
 
 function cleanJsonCodeFence(raw: string): string {
   let cleaned = raw.trim();
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch) {
+    cleaned = codeBlockMatch[1].trim();
+  }
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
   }
   return cleaned.trim();
+}
+
+function normalizeAnalyst(parsed: any, side: "A" | "B"): any {
+  if (parsed && typeof parsed === "object") {
+    if (parsed.analyst && typeof parsed.analyst === "object") parsed = parsed.analyst;
+    else if (parsed.analysis && typeof parsed.analysis === "object") parsed = parsed.analysis;
+    else if (parsed.result && typeof parsed.result === "object") parsed = parsed.result;
+  } else {
+    parsed = {};
+  }
+
+  parsed.side = side;
+  const toArray = (v: any) => (Array.isArray(v) ? v : typeof v === "string" && v.trim() ? [v.trim()] : []);
+  parsed.upset_about = toArray(parsed.upset_about);
+  parsed.stated_facts = toArray(parsed.stated_facts);
+  parsed.assumptions_made = toArray(parsed.assumptions_made);
+  parsed.possible_feelings = toArray(parsed.possible_feelings);
+  parsed.unclear_lines = toArray(parsed.unclear_lines);
+
+  if (!parsed.safety_flags || typeof parsed.safety_flags !== "object") {
+    parsed.safety_flags = { abuse_or_coercion_signals: false, notes: "" };
+  } else {
+    parsed.safety_flags.abuse_or_coercion_signals = Boolean(parsed.safety_flags.abuse_or_coercion_signals);
+    parsed.safety_flags.notes = String(parsed.safety_flags.notes || "");
+  }
+  return parsed;
+}
+
+function normalizeMediator(parsed: any): any {
+  if (parsed && typeof parsed === "object") {
+    if (parsed.mediator && typeof parsed.mediator === "object") parsed = parsed.mediator;
+    else if (parsed.mediator_result && typeof parsed.mediator_result === "object") parsed = parsed.mediator_result;
+    else if (parsed.result && typeof parsed.result === "object") parsed = parsed.result;
+  } else {
+    parsed = {};
+  }
+
+  const toArray = (v: any) => (Array.isArray(v) ? v : typeof v === "string" && v.trim() ? [v.trim()] : []);
+
+  if (!parsed.what_each_is_upset_about || typeof parsed.what_each_is_upset_about !== "object") {
+    parsed.what_each_is_upset_about = { A: [], B: [] };
+  } else {
+    parsed.what_each_is_upset_about.A = toArray(parsed.what_each_is_upset_about.A);
+    parsed.what_each_is_upset_about.B = toArray(parsed.what_each_is_upset_about.B);
+  }
+
+  parsed.where_interpretations_differ = toArray(parsed.where_interpretations_differ);
+
+  let score = Number(parsed.petty_score);
+  if (isNaN(score)) score = 5;
+  parsed.petty_score = Math.max(0, Math.min(10, Math.round(score)));
+
+  if (!parsed.zoom_out || typeof parsed.zoom_out !== "object") {
+    parsed.zoom_out = {
+      immediate_issue: "Misunderstanding between parties",
+      possible_underlying_feelings: ["tension", "grief"],
+      bigger_picture: "Navigating communication challenges during difficult moments",
+    };
+  } else {
+    parsed.zoom_out.immediate_issue = String(parsed.zoom_out.immediate_issue || "Disagreement between parties");
+    parsed.zoom_out.possible_underlying_feelings = toArray(parsed.zoom_out.possible_underlying_feelings);
+    parsed.zoom_out.bigger_picture = String(parsed.zoom_out.bigger_picture || "Communication breakdown");
+  }
+
+  if (!parsed.truce || typeof parsed.truce !== "object") {
+    parsed.truce = {
+      next_step: "Take a step back and have a calm conversation without blame.",
+      requires_apology: false,
+    };
+  } else {
+    parsed.truce.next_step = String(parsed.truce.next_step || "Take a pause to reflect.");
+    parsed.truce.requires_apology = false;
+  }
+
+  return parsed;
 }
 
 export class OpenAiLlmProvider
@@ -73,44 +154,52 @@ export class OpenAiLlmProvider
     }
 
     const endpoint = `${this.baseUrl.replace(/\/+$/, "")}/chat/completions`;
-    let response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
-      },
-      body: JSON.stringify(payload),
-      signal,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const combinedSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
 
-    // If provider rejected response_format json_object, retry without response_format
-    if (!response.ok && jsonMode) {
-      delete payload.response_format;
-      response = await fetch(endpoint, {
+    try {
+      let response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
         },
         body: JSON.stringify(payload),
-        signal,
+        signal: combinedSignal,
       });
-    }
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      throw new ZoomOutPublicError(
-        "MODEL_FAILED",
-        `LLM request (${this.model}) failed (${response.status}): ${errText.slice(0, 200)}`
-      );
-    }
+      // If provider rejected response_format json_object, retry without response_format
+      if (!response.ok && jsonMode) {
+        delete payload.response_format;
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+          },
+          body: JSON.stringify(payload),
+          signal: combinedSignal,
+        });
+      }
 
-    const data = (await response.json()) as any;
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) {
-      throw new ZoomOutPublicError("MODEL_FAILED", `LLM model (${this.model}) returned empty message content`);
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        throw new ZoomOutPublicError(
+          "MODEL_FAILED",
+          `LLM request (${this.model}) failed (${response.status}): ${errText.slice(0, 200)}`
+        );
+      }
+
+      const data = (await response.json()) as any;
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new ZoomOutPublicError("MODEL_FAILED", `LLM model (${this.model}) returned empty message content`);
+      }
+      return content;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return content;
   }
 
   // --- Analyst ---
@@ -130,9 +219,8 @@ export class OpenAiLlmProvider
     let parsed: any;
     try {
       parsed = JSON.parse(cleanJsonCodeFence(raw));
-      parsed.side = side; // Enforce side binding
-      const validated = AnalystSchema.parse(parsed);
-      return validated;
+      parsed = normalizeAnalyst(parsed, side);
+      return AnalystSchema.parse(parsed);
     } catch {
       // Retry once (FR-006-03)
       messages.push({ role: "assistant", content: raw });
@@ -143,7 +231,7 @@ export class OpenAiLlmProvider
       raw = await this.fetchChatCompletion(messages, true, signal);
       try {
         parsed = JSON.parse(cleanJsonCodeFence(raw));
-        parsed.side = side;
+        parsed = normalizeAnalyst(parsed, side);
         return AnalystSchema.parse(parsed);
       } catch (err: any) {
         throw new ZoomOutPublicError(
@@ -170,9 +258,7 @@ export class OpenAiLlmProvider
     let parsed: any;
     try {
       parsed = JSON.parse(cleanJsonCodeFence(raw));
-      if (parsed.truce) {
-        parsed.truce.requires_apology = false; // Invariant
-      }
+      parsed = normalizeMediator(parsed);
       return MediatorSchema.parse(parsed);
     } catch {
       messages.push({ role: "assistant", content: raw });
@@ -183,9 +269,7 @@ export class OpenAiLlmProvider
       raw = await this.fetchChatCompletion(messages, true, signal);
       try {
         parsed = JSON.parse(cleanJsonCodeFence(raw));
-        if (parsed.truce) {
-          parsed.truce.requires_apology = false;
-        }
+        parsed = normalizeMediator(parsed);
         return MediatorSchema.parse(parsed);
       } catch (err: any) {
         throw new ZoomOutPublicError(

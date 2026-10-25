@@ -18,9 +18,9 @@ export const AnalystSchema = z
         abuse_or_coercion_signals: z.boolean(),
         notes: boundedString,
       })
-      .strict(),
+      .passthrough(),
   })
-  .strict();
+  .passthrough();
 
 export type AnalystOutput = z.infer<typeof AnalystSchema>;
 
@@ -32,7 +32,7 @@ export const MediatorSchema = z
         A: boundedStringArray,
         B: boundedStringArray,
       })
-      .strict(),
+      .passthrough(),
     where_interpretations_differ: boundedStringArray,
     petty_score: z.number().int().min(0).max(10),
     zoom_out: z
@@ -41,15 +41,15 @@ export const MediatorSchema = z
         possible_underlying_feelings: boundedStringArray,
         bigger_picture: boundedString,
       })
-      .strict(),
+      .passthrough(),
     truce: z
       .object({
         next_step: boundedString,
         requires_apology: z.literal(false),
       })
-      .strict(),
+      .passthrough(),
   })
-  .strict();
+  .passthrough();
 
 export type MediatorResult = z.infer<typeof MediatorSchema>;
 

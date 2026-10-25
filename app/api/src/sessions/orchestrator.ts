@@ -60,27 +60,32 @@ export async function runOrchestrationPipeline(
   const textB = room.transcripts.B?.trim();
 
   if (!textA || !textB || !room.confirmed.A || !room.confirmed.B) {
+    console.warn(`[ZoomOut Orchestrator] Missing transcripts or confirmations for room ${room.room}. textA=${!!textA}, textB=${!!textB}, confA=${room.confirmed.A}, confB=${room.confirmed.B}`);
     return;
   }
 
   const generationId = crypto.randomUUID();
   room.generationId = generationId;
   room.sessionState = "MEDIATING";
+  console.log(`[ZoomOut Orchestrator] Starting mediation pipeline for room ${room.room} (generation ${generationId.slice(0, 8)})...`);
 
   try {
     // 1. Analyst Phase (Run privately and in parallel)
+    console.log(`[ZoomOut Orchestrator] Running Analyst for Side A and Side B...`);
     const [analysisA, analysisB] = await Promise.all([
       providers.analyst.analyze("A", textA, signal),
       providers.analyst.analyze("B", textB, signal),
     ]);
 
     if (signal?.aborted) return;
+    console.log(`[ZoomOut Orchestrator] Analysts completed. Checking safety flags...`);
 
     // 2. Deterministic Safety Check
     const safetyA = analysisA.safety_flags.abuse_or_coercion_signals;
     const safetyB = analysisB.safety_flags.abuse_or_coercion_signals;
 
     if (safetyA || safetyB) {
+      console.log(`[ZoomOut Orchestrator] Safety flag triggered for room ${room.room}`);
       room.sessionState = "RESOLVED";
       room.outcome = "safety";
       const safetyMessage =
@@ -95,13 +100,16 @@ export async function runOrchestrationPipeline(
     }
 
     // 3. Mediator Phase
+    console.log(`[ZoomOut Orchestrator] Running Mediator comparison...`);
     const mediatorResult = await providers.mediator.mediate(analysisA, analysisB, signal);
     if (signal?.aborted) return;
 
+    console.log(`[ZoomOut Orchestrator] Mediator completed (petty score: ${mediatorResult.petty_score}/10). Broadcasting analysis...`);
     room.sharedResult = mediatorResult;
     broadcastToRoom(room, "analysis_json", mediatorResult);
 
     // 4. Judge Phase & TTS Synthesis
+    console.log(`[ZoomOut Orchestrator] Delivering Judge verdict...`);
     room.sessionState = "JUDGING";
     const fullSentences: Array<{ sentence: string; seq: number }> = [];
 
@@ -199,8 +207,10 @@ export async function runOrchestrationPipeline(
 
     room.sessionState = "RESOLVED";
     room.outcome = "verdict";
+    console.log(`[ZoomOut Orchestrator] Pipeline completed successfully for room ${room.room}!`);
   } catch (err: any) {
     if (signal?.aborted) return;
+    console.error(`[ZoomOut Orchestrator] Pipeline error for room ${room.room}:`, err?.message || err);
     room.sessionState = "FAILED";
     room.outcome = "incomplete";
     broadcastToRoom(room, "error", {
