@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
-import { ZoomOutPublicError } from "@zoomout/contracts";
+import { ZoomOutPublicError, devanagariToMalayalam } from "@zoomout/contracts";
 import { SttProvider, SttResult } from "./types.js";
 
 export class WhisperSttProvider implements SttProvider {
@@ -25,13 +25,11 @@ export class WhisperSttProvider implements SttProvider {
       throw new ZoomOutPublicError("BAD_EVENT", "Transcription aborted by client");
     }
 
-    // If OpenAI API key is available, we could call OpenAI or local Whisper
     const scriptPath =
       this.options.scriptPath ??
       path.resolve(process.cwd(), "../../scripts/provider-spike/transcribe_whisper.py");
     const pythonBin = this.options.pythonPath ?? (process.platform === "win32" ? "python" : "python3");
 
-    // Write audio to temporary file for local Whisper runner
     const ext = mime.includes("webm") ? ".webm" : mime.includes("ogg") ? ".ogg" : ".wav";
     const tempFile = path.join(os.tmpdir(), `zoomout-stt-${crypto.randomUUID()}${ext}`);
 
@@ -43,6 +41,8 @@ export class WhisperSttProvider implements SttProvider {
       }
 
       const result = await this.invokeLocalWhisper(pythonBin, scriptPath, tempFile, signal);
+      // Guarantee Malayalam script
+      result.text = devanagariToMalayalam(result.text);
       return result;
     } finally {
       // Immediate raw audio deletion from disk (FR-004-06, FR-004-07)
@@ -105,8 +105,6 @@ export class WhisperSttProvider implements SttProvider {
         }
 
         try {
-          // Parse json from stdout
-          // The script writes JSON as the last line or full stdout
           const lines = stdoutData.trim().split("\n");
           const jsonLine = lines[lines.length - 1];
           const parsed = JSON.parse(jsonLine);

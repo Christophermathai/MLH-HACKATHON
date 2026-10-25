@@ -15,7 +15,14 @@ import {
   ClaimParticipantResponseSchema,
   AudioManifestSchema,
   ZoomOutPublicError,
+  devanagariToMalayalam,
 } from "./index.js";
+
+test("devanagariToMalayalam converts Devanagari phonetics to Malayalam script", () => {
+  const devanagariText = "अगने साम्पोच्छते नल्लतिन आबु.";
+  const malayalamText = devanagariToMalayalam(devanagariText);
+  assert.equal(malayalamText, "അഗനേ സാമ്പോച്ഛതേ നല്ലതിന ആബു.");
+});
 
 test("AC-002-02: Valid client and server messages parse with versioned envelope", () => {
   const clientJoin = createClientMessage("join", {
