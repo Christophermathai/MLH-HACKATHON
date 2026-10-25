@@ -75,6 +75,13 @@ export const SessionSnapshotSchema = z
         B: z.boolean(),
       })
       .strict(),
+    presence: z
+      .object({
+        A: z.boolean(),
+        B: z.boolean(),
+      })
+      .strict()
+      .optional(),
     sessionState: z.enum(SESSION_STATES),
     generationId: z.string().nullable(),
     sharedResult: MediatorSchema.nullable().optional(),

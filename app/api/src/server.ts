@@ -115,6 +115,10 @@ export function createGatewayServer(
         A: room.confirmed.A && room.consent.A,
         B: room.confirmed.B && room.consent.B,
       },
+      presence: {
+        A: room.sockets.A !== null && room.sockets.A.readyState === WebSocket.OPEN,
+        B: room.sockets.B !== null && room.sockets.B.readyState === WebSocket.OPEN,
+      },
       sessionState: room.sessionState,
       generationId: room.generationId,
       sharedResult: room.sharedResult,
@@ -122,6 +126,19 @@ export function createGatewayServer(
       outcome: room.outcome,
       audioManifest: room.audioManifest,
     };
+  }
+
+  function broadcastSnapshots(room: RoomData) {
+    if (room.sockets.A && room.sockets.A.readyState === WebSocket.OPEN) {
+      try {
+        room.sockets.A.send(JSON.stringify(createServerMessage("session_snapshot", getSnapshot(room, "A"))));
+      } catch {}
+    }
+    if (room.sockets.B && room.sockets.B.readyState === WebSocket.OPEN) {
+      try {
+        room.sockets.B.send(JSON.stringify(createServerMessage("session_snapshot", getSnapshot(room, "B"))));
+      } catch {}
+    }
   }
 
   const server = http.createServer(async (req, res) => {
@@ -333,9 +350,8 @@ export function createGatewayServer(
           boundSide = side;
           room.sockets[side] = ws;
 
-          // Send session snapshot
-          const snapshot = getSnapshot(room, side);
-          ws.send(JSON.stringify(createServerMessage("session_snapshot", snapshot, message.requestId)));
+          // Broadcast session snapshot to all connected participants in this room
+          broadcastSnapshots(room);
           return;
         }
 
@@ -424,6 +440,7 @@ export function createGatewayServer(
     ws.on("close", () => {
       if (boundRoom && boundSide && boundRoom.sockets[boundSide] === ws) {
         boundRoom.sockets[boundSide] = null;
+        broadcastSnapshots(boundRoom);
       }
     });
   });

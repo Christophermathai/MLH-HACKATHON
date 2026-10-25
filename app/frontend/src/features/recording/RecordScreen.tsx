@@ -12,6 +12,23 @@ export interface RecordScreenProps {
   onSwitchToTyped?: () => void;
 }
 
+function getBestAudioMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  const types = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/aac",
+    "audio/ogg;codecs=opus",
+  ];
+  for (const t of types) {
+    if (MediaRecorder.isTypeSupported(t)) {
+      return t;
+    }
+  }
+  return undefined;
+}
+
 export function RecordScreen({
   roomCode,
   side,
@@ -23,6 +40,8 @@ export function RecordScreen({
   const [isRecording, setIsRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const isSecure = typeof window !== "undefined" ? window.isSecureContext : true;
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -37,8 +56,16 @@ export function RecordScreen({
 
   const startRecording = async () => {
     setErrorMessage(null);
+
+    if (!isSecure) {
+      setErrorMessage(
+        "Browsers block microphone access over plain HTTP (e.g. http://192.168...). Mobile and remote browsers require HTTPS (e.g. the Dev Tunnel link) for voice recording. You can also tap 'Type your side instead' below."
+      );
+      return;
+    }
+
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setErrorMessage("Microphone access is not supported in this browser. Please switch to typed input.");
+      setErrorMessage("Microphone access is not available in this browser. Please switch to typed input below.");
       return;
     }
 
@@ -48,7 +75,10 @@ export function RecordScreen({
       });
       streamRef.current = stream;
 
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      const mimeType = getBestAudioMimeType();
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = async (e) => {
@@ -81,8 +111,16 @@ export function RecordScreen({
           return s + 1;
         });
       }, 1000);
-    } catch {
-      setErrorMessage("Microphone permission was denied. You can type your side instead.");
+    } catch (err: any) {
+      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+        setErrorMessage("Microphone permission was denied by browser settings. Please allow microphone access or tap 'Type your side instead'.");
+      } else if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") {
+        setErrorMessage("No microphone detected on this device. Switch to typed input below.");
+      } else if (err?.name === "NotSupportedError") {
+        setErrorMessage("Audio recording is not supported in this format by your browser. Switch to typed input below.");
+      } else {
+        setErrorMessage(err?.message || "Microphone could not be accessed. You can type your side instead.");
+      }
     }
   };
 
@@ -114,6 +152,18 @@ export function RecordScreen({
           sharing.
         </p>
       </div>
+
+      {!isSecure && (
+        <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-800 dark:text-amber-200 space-y-1">
+          <p className="font-bold flex items-center gap-1.5">
+            <span>⚠️</span>
+            <span>Microphone requires HTTPS on remote devices</span>
+          </p>
+          <p className="opacity-90 leading-relaxed">
+            Browsers block microphone access over plain HTTP (like <code>http://192.168...</code>). For voice recording from a phone or second device, use the <strong>HTTPS Dev Tunnel</strong> link, or tap below to type your side directly.
+          </p>
+        </div>
+      )}
 
       {errorMessage && (
         <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded text-xs text-red-600 dark:text-red-300">

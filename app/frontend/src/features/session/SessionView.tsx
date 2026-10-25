@@ -66,6 +66,8 @@ export function SessionView({
   const [unclearLines, setUnclearLines] = useState<string[]>([]);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [isOtherSideReady, setIsOtherSideReady] = useState(false);
+  const [presence, setPresence] = useState<{ A: boolean; B: boolean }>({ A: false, B: false });
+  const [readiness, setReadiness] = useState<{ A: boolean; B: boolean }>({ A: false, B: false });
 
   // Results State
   const [mediatorResult, setMediatorResult] = useState<MediatorResult | null>(null);
@@ -182,6 +184,8 @@ export function SessionView({
                 if (snap.ownText) setTranscript(snap.ownText);
                 const otherSide = side === "A" ? "B" : "A";
                 setIsOtherSideReady(snap.readiness[otherSide]);
+                if (snap.readiness) setReadiness(snap.readiness);
+                if (snap.presence) setPresence(snap.presence);
                 if (snap.sharedResult) setMediatorResult(snap.sharedResult);
                 if (snap.verdictText) setVerdictText(snap.verdictText);
                 if (snap.outcome) setOutcome(snap.outcome);
@@ -197,7 +201,9 @@ export function SessionView({
               }
 
               case "side_ready": {
-                if (msg.payload.side === side) {
+                const confirmedSide = msg.payload.side as Side;
+                setReadiness((prev) => ({ ...prev, [confirmedSide]: true }));
+                if (confirmedSide === side) {
                   setIsConfirmed(true);
                   setOwnState("READY");
                 } else {
@@ -208,6 +214,7 @@ export function SessionView({
 
               case "both_ready": {
                 setIsOtherSideReady(true);
+                setReadiness({ A: true, B: true });
                 setSessionState("BOTH_READY");
                 break;
               }
@@ -382,6 +389,8 @@ export function SessionView({
     setOutcome(null);
     setAudioChunks(new Map());
     setAudioManifest(null);
+    setPresence({ A: false, B: false });
+    setReadiness({ A: false, B: false });
     setSessionState("CREATED");
     setOwnState("IDLE");
   };
@@ -505,27 +514,79 @@ export function SessionView({
         </aside>
       )}
 
-      {/* Share room code banner for Side A when Side B hasn't joined */}
-      {side === "A" && !isOtherSideReady && !isPostConsent && (
-        <aside className="bg-primary/5 border-b py-2.5 px-6 flex items-center justify-center gap-3 text-xs text-primary font-medium">
-          <span>
-            Share this room code with the other person:{" "}
-            <strong className="font-mono text-sm underline tracking-wider">{room}</strong>
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              const url = `${window.location.origin}/?room=${room}`;
-              navigator.clipboard.writeText(url);
-              setCopiedLink(true);
-              setTimeout(() => setCopiedLink(false), 2500);
-            }}
-            className="py-1 px-2.5 rounded bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition shadow-sm"
-          >
-            {copiedLink ? "✓ Copied Invite Link!" : "Copy Invite Link"}
-          </button>
-        </aside>
-      )}
+      {/* Room Members & Live Presence Bar */}
+      <section className="bg-card/70 border-b px-6 py-3">
+        <div className="max-w-3xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+          {/* Members presence */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="font-bold text-muted-foreground uppercase tracking-wider text-[11px]">
+              Court Members:
+            </span>
+
+            {/* Participant A */}
+            <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border shadow-xs ${side === "A" ? "bg-primary/5 border-primary/30" : "bg-background"}`}>
+              <span className={`w-2 h-2 rounded-full ${presence.A ? "bg-emerald-500 animate-pulse" : "bg-zinc-400"}`} />
+              <div className="flex items-center gap-1.5 font-medium">
+                <span>Side A (Host)</span>
+                {side === "A" && (
+                  <span className="bg-primary/15 text-primary text-[10px] font-bold px-1.5 py-0.2 rounded">
+                    YOU
+                  </span>
+                )}
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                readiness.A
+                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300"
+                  : presence.A
+                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300"
+                  : "bg-muted text-muted-foreground"
+              }`}>
+                {readiness.A ? "✓ Ready" : presence.A ? "In Court" : "Offline"}
+              </span>
+            </div>
+
+            {/* Participant B */}
+            <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border shadow-xs ${side === "B" ? "bg-primary/5 border-primary/30" : "bg-background"}`}>
+              <span className={`w-2 h-2 rounded-full ${presence.B ? "bg-emerald-500 animate-pulse" : "bg-zinc-400"}`} />
+              <div className="flex items-center gap-1.5 font-medium">
+                <span>Side B (Respondent)</span>
+                {side === "B" && (
+                  <span className="bg-primary/15 text-primary text-[10px] font-bold px-1.5 py-0.2 rounded">
+                    YOU
+                  </span>
+                )}
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                readiness.B
+                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300"
+                  : presence.B
+                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300"
+                  : "bg-muted text-muted-foreground"
+              }`}>
+                {readiness.B ? "✓ Ready" : presence.B ? "In Court" : "Waiting to Join"}
+              </span>
+            </div>
+          </div>
+
+          {/* Quick Copy Link for Side A when Side B hasn't joined */}
+          {!isPostConsent && (
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  const url = `${window.location.origin}/?room=${room}`;
+                  navigator.clipboard.writeText(url);
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2500);
+                }}
+                className="py-1 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition shadow-xs flex items-center gap-1.5"
+              >
+                <span>{copiedLink ? "✓ Copied!" : "📋 Copy Invite Link"}</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Screen Routing */}
       <main className="py-6">
