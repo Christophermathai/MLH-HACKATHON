@@ -1,6 +1,12 @@
 import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../.env") }); // app/api/.env (when built in dist)
+dotenv.config({ path: path.resolve(__dirname, "../../.env") }); // root .env
+dotenv.config({ path: path.resolve(process.cwd(), "app/api/.env") });
+dotenv.config(); // CWD .env
 
 export interface ServerConfig {
   port: number;
@@ -50,7 +56,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 
   const llmModel = (
     env.LLM_MODEL ||
-    (env.DIGITALOCEAN_ACCESS_TOKEN || env.DO_ACCESS_TOKEN ? "google/gemma-2-9b-it" : undefined) ||
+    (env.DIGITALOCEAN_ACCESS_TOKEN || env.DO_ACCESS_TOKEN ? "gemma-4-31B-it" : undefined) ||
     (env.GROQ_API_KEY ? "gemma2-9b-it" : undefined) ||
     (env.GEMINI_API_KEY ? "gemma-2-9b-it" : undefined) ||
     (env.OLLAMA_BASE_URL ? "gemma2" : undefined) ||
