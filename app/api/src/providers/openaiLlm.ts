@@ -155,7 +155,7 @@ export class OpenAiLlmProvider
 
     const endpoint = `${this.baseUrl.replace(/\/+$/, "")}/chat/completions`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
     const combinedSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
 
     try {

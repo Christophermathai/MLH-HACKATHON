@@ -94,7 +94,8 @@ export function createGatewayServer(
   const rooms = new Map<string, RoomData>();
 
   // Initialize pipeline providers based on mode or overrides
-  const isLive = config.providerMode === "live";
+  const hasLiveCredentials = Boolean(config.llmApiKey && config.elevenlabsApiKey);
+  const isLive = config.providerMode === "live" || hasLiveCredentials;
   const llmProvider = isLive && (config.llmApiKey || config.openaiApiKey || config.llmBaseUrl?.includes("11434"))
     ? new OpenAiLlmProvider({
         apiKey: config.llmApiKey || config.openaiApiKey,
@@ -113,9 +114,9 @@ export function createGatewayServer(
 
   const sttProvider: SttProvider =
     customProviders?.stt ??
-    (isLive && (config.elevenlabsApiKey || process.env.ELEVENLABS_API_KEY)
+    (config.elevenlabsApiKey
       ? new WhisperSttProvider({
-          elevenlabsApiKey: config.elevenlabsApiKey || process.env.ELEVENLABS_API_KEY,
+          elevenlabsApiKey: config.elevenlabsApiKey,
           elevenlabsModelId: process.env.ELEVENLABS_STT_MODEL_ID || "scribe_v1",
           elevenlabsLanguageCode: process.env.ELEVENLABS_STT_LANGUAGE_CODE || "mal",
         })
