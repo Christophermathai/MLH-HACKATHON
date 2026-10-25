@@ -1,21 +1,14 @@
 # Transcript review and consent: implementation notes
 
-## Current evidence
-
-- Documentation prepared on 2026-10-25.
-- Application changes: none.
-- Provider calls and deployments: none.
-- Runtime tests/builds: not run; application source and package manifests do not exist.
-- Document checks and readiness findings: see [audit.md](audit.md).
-
-## Inputs needed before live execution
-
-Confirmation locking and 4000-character limits are explicit working defaults. Unsaved edits survive normal component state only; they are not promised to survive reload.
-
-## Execution record
-
-No implementation phases have been attempted. Append a dated entry for each phase with: files changed; requirement/acceptance IDs; exact check commands and observed results; live versus fake providers; failures and fixes; deviations; remaining work. Do not populate successes in advance.
-
-## Resume pointer
-
-Read [status.md](status.md) and start with its next action. Proposed source paths in plan.md are not existing files. Preserve unrelated working-tree changes when implementation begins.
+- Created `ReviewScreen.tsx` (`app/frontend/src/features/review/ReviewScreen.tsx`):
+  - Multiline Malayalam/English text area.
+  - Unicode code point counting enforcing 1–4000 limit.
+  - Displays speech uncertainty hints when provided.
+  - Unchecked consent checkbox with required consent copy.
+  - Mandatory safety copy explaining everyday disagreement scope and 30-min room lifetime.
+  - Locked state with waiting indicator when user confirms and waits for the other participant.
+- Added `confirmation.test.ts` (`app/api/src/sessions/confirmation.test.ts`):
+  - Validates Malayalam text acceptance with `consent: true`.
+  - Rejects `consent: false` or missing consent.
+  - Rejects empty/whitespace input and input > 4000 code points.
+  - Tests gateway WebSocket `confirm_transcript` exchange, text locking, and `side_ready` broadcast.
