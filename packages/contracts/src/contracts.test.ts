@@ -21,7 +21,7 @@ import {
 test("devanagariToMalayalam converts Devanagari phonetics to Malayalam script", () => {
   const devanagariText = "अगने साम्पोच्छते नल्लतिन आबु.";
   const malayalamText = devanagariToMalayalam(devanagariText);
-  assert.equal(malayalamText, "അഗനേ സാമ്പോച്ഛതേ നല്ലതിന ആബു.");
+  assert.equal(malayalamText, "അഗനെ സാമ്പോച്ഛതെ നല്ലതിന് ആബു.");
 });
 
 test("AC-002-02: Valid client and server messages parse with versioned envelope", () => {

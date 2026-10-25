@@ -6,7 +6,7 @@
  * like Malayalam. This utility provides a lossless, deterministic mapping to Malayalam script.
  */
 
-const DEV_TO_MAL_MAP: Record<number, number> = {
+const DEV_TO_MAL_MAP: Record<number, number | null> = {
   // Signs
   0x0901: 0x0D01, // Candrabindu
   0x0902: 0x0D02, // Anusvara
@@ -23,11 +23,11 @@ const DEV_TO_MAL_MAP: Record<number, number> = {
   0x090C: 0x0D0C, // Vocalic L
   0x090D: 0x0D0E, // Candra E -> Short E
   0x090E: 0x0D0E, // Short E
-  0x090F: 0x0D0F, // E
+  0x090F: 0x0D0E, // E -> Short E
   0x0910: 0x0D10, // AI
   0x0911: 0x0D12, // Candra O -> Short O
   0x0912: 0x0D12, // Short O
-  0x0913: 0x0D13, // O
+  0x0913: 0x0D12, // O -> Short O
   0x0914: 0x0D14, // AU
 
   // Consonants
@@ -40,6 +40,7 @@ const DEV_TO_MAL_MAP: Record<number, number> = {
   0x092F: 0x0D2F, 0x0930: 0x0D30, 0x0931: 0x0D31, 0x0932: 0x0D32, 0x0933: 0x0D33,
   0x0934: 0x0D34, 0x0935: 0x0D35, 0x0936: 0x0D36, 0x0937: 0x0D37, 0x0938: 0x0D38,
   0x0939: 0x0D39,
+  0x093C: null, // Drop nukta
 
   // Vowel signs (matras)
   0x093E: 0x0D3E, // aa
@@ -51,12 +52,12 @@ const DEV_TO_MAL_MAP: Record<number, number> = {
   0x0944: 0x0D44, // rr
   0x0945: 0x0D46, // candra e -> short e
   0x0946: 0x0D46, // short e
-  0x0947: 0x0D47, // e
+  0x0947: 0x0D46, // e -> short e
   0x0948: 0x0D48, // ai
-  0x0949: 0x0D4A, // candra o -> short o
+  0x0949: 0x0D4B, // candra o -> long o
   0x094A: 0x0D4A, // short o
   0x094B: 0x0D4B, // o
-  0x094C: 0x0D4C, // au
+  0x094C: 0x0D57, // au length mark
   0x094D: 0x0D4D, // virama (chandrakkala)
 
   // Numerals
@@ -73,13 +74,21 @@ export function devanagariToMalayalam(text: string): string {
   let out = "";
   for (let i = 0; i < text.length; i++) {
     const cp = text.charCodeAt(i);
-    if (DEV_TO_MAL_MAP[cp] !== undefined) {
-      out += String.fromCharCode(DEV_TO_MAL_MAP[cp]);
+    if (cp in DEV_TO_MAL_MAP) {
+      const mapped = DEV_TO_MAL_MAP[cp];
+      if (mapped !== null && mapped !== undefined) {
+        out += String.fromCharCode(mapped);
+      }
     } else if (cp >= 0x0900 && cp <= 0x097F) {
       out += String.fromCharCode(cp + 0x0400);
     } else {
       out += text[i];
     }
   }
-  return out;
+
+  return out
+    .replace(/\u0d30\u0d4d(?=[\u0d15-\u0d39])/g, "\u0d7c")
+    .replace(/\u0d41\u0d2e(?=$|[\s.,!?;:])/g, "\u0d41\u0d02")
+    .replace(/\u0d3f\u0d32(?=$|[\s.,!?;:])/g, "\u0d3f\u0d7d")
+    .replace(/\u0d3f\u0d28(?=$|[\s.,!?;:])/g, "\u0d3f\u0d28\u0d4d");
 }

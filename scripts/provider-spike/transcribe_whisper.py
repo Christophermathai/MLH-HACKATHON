@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import platform
+import re
 import time
 from pathlib import Path
 
@@ -25,7 +27,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def devanagari_to_malayalam(text: str) -> str:
-    """Convert any Devanagari characters (often emitted by Whisper for Indic phonemes) to Malayalam script."""
+    """Convert any Devanagari characters (emitted by Whisper for Indic phonemes) to Malayalam script."""
     mapping = {
         # Signs
         0x0901: 0x0D01, # Candrabindu
@@ -42,11 +44,11 @@ def devanagari_to_malayalam(text: str) -> str:
         0x090C: 0x0D0C, # Vocalic L
         0x090D: 0x0D0E, # Candra E -> Short E
         0x090E: 0x0D0E, # Short E
-        0x090F: 0x0D0F, # E
+        0x090F: 0x0D0E, # E -> Short E in Malayalam phonetic transcription
         0x0910: 0x0D10, # AI
         0x0911: 0x0D12, # Candra O -> Short O
         0x0912: 0x0D12, # Short O
-        0x0913: 0x0D13, # O
+        0x0913: 0x0D12, # O -> Short O in Malayalam phonetic transcription
         0x0914: 0x0D14, # AU
         # Consonants
         0x0915: 0x0D15, 0x0916: 0x0D16, 0x0917: 0x0D17, 0x0918: 0x0D18, 0x0919: 0x0D19,
@@ -58,6 +60,7 @@ def devanagari_to_malayalam(text: str) -> str:
         0x092F: 0x0D2F, 0x0930: 0x0D30, 0x0931: 0x0D31, 0x0932: 0x0D32, 0x0933: 0x0D33,
         0x0934: 0x0D34, 0x0935: 0x0D35, 0x0936: 0x0D36, 0x0937: 0x0D37, 0x0938: 0x0D38,
         0x0939: 0x0D39,
+        0x093C: None, # Drop Devanagari nukta
         # Vowel signs (matras)
         0x093E: 0x0D3E, # aa
         0x093F: 0x0D3F, # i
@@ -68,12 +71,12 @@ def devanagari_to_malayalam(text: str) -> str:
         0x0944: 0x0D44, # rr
         0x0945: 0x0D46, # candra e -> short e
         0x0946: 0x0D46, # short e
-        0x0947: 0x0D47, # e
+        0x0947: 0x0D46, # e -> short e
         0x0948: 0x0D48, # ai
-        0x0949: 0x0D4A, # candra o -> short o
+        0x0949: 0x0D4B, # candra o -> long o (loanwords like प्रॉमिसिंग -> പ്രോമിസിംഗ്)
         0x094A: 0x0D4A, # short o
         0x094B: 0x0D4B, # o
-        0x094C: 0x0D4C, # au
+        0x094C: 0x0D57, # au length mark
         0x094D: 0x0D4D, # virama (chandrakkala)
         # Numerals
         0x0966: 0x0D66, 0x0967: 0x0D67, 0x0968: 0x0D68, 0x0969: 0x0D69, 0x096A: 0x0D6A,
@@ -86,18 +89,26 @@ def devanagari_to_malayalam(text: str) -> str:
     for c in text:
         cp = ord(c)
         if cp in mapping:
-            out.append(chr(mapping[cp]))
+            if mapping[cp] is not None:
+                out.append(chr(mapping[cp]))
         elif 0x0900 <= cp <= 0x097F:
-            shifted = cp + (0x0D00 - 0x0900)
-            out.append(chr(shifted))
+            out.append(chr(cp + 0x0400))
         else:
             out.append(c)
-    return ''.join(out)
+    res = ''.join(out)
+    # Convert r + virama before consonant to chillu r (ർ)
+    res = re.sub(r'\u0d30\u0d4d(?=[\u0d15-\u0d39])', '\u0d7c', res)
+    # Convert word-final -ുമ (-uma) to -ും (-um)
+    res = re.sub(r'\u0d41\u0d2e(?=$|[\s.,!?;:])', '\u0d41\u0d02', res)
+    # Convert word-final -ില (-ila) to -ിൽ (-il)
+    res = re.sub(r'\u0d3f\u0d32(?=$|[\s.,!?;:])', '\u0d3f\u0d7d', res)
+    # Convert word-final -ിന (-ina) to -ിന് (-inu)
+    res = re.sub(r'\u0d3f\u0d28(?=$|[\s.,!?;:])', '\u0d3f\u0d28\u0d4d', res)
+    return res
 
 
 def main() -> int:
     args = parse_args()
-    import math
     import numpy as np
     import soundfile as sf
     import torch
@@ -113,7 +124,7 @@ def main() -> int:
 
     model = AutoModelForSpeechSeq2Seq.from_pretrained(
         MODEL_ID,
-        torch_dtype=dtype,
+        dtype=dtype,
         low_cpu_mem_usage=True,
         use_safetensors=True,
     )
@@ -124,19 +135,14 @@ def main() -> int:
     forced_decoder_ids = processor.get_decoder_prompt_ids(language=args.language, task="transcribe")
     model.generation_config.forced_decoder_ids = forced_decoder_ids
 
-    # Prompt IDs anchoring Malayalam script
-    try:
-        prompt_ids = processor.get_prompt_ids("ഇത് മലയാളം സംഭാഷണമാണ്. മലയാളത്തിൽ എഴുതുക.")
-    except Exception:
-        prompt_ids = None
-
     transcriber = pipeline(
         "automatic-speech-recognition",
         model=model,
         tokenizer=processor.tokenizer,
         feature_extractor=processor.feature_extractor,
+        chunk_length_s=30,
         batch_size=1,
-        torch_dtype=dtype,
+        dtype=dtype,
         device=device,
     )
 
@@ -190,8 +196,6 @@ def main() -> int:
             "repetition_penalty": 1.2,
             "no_repeat_ngram_size": 3,
         }
-        if prompt_ids is not None:
-            gen_kwargs["prompt_ids"] = prompt_ids
 
         started = time.perf_counter()
         prediction = transcriber(
