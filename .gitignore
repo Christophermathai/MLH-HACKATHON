@@ -1,0 +1,22 @@
+# Dependencies and builds
+node_modules/
+dist/
+.next/
+out/
+*.tsbuildinfo
+coverage/
+test-results/
+
+# Local provider-spike inputs and generated speech outputs may contain private audio.
+scripts/provider-spike/samples-private/
+scripts/provider-spike/output/
+scripts/provider-spike/.venv/
+scripts/provider-spike/.python/
+scripts/provider-spike/.uv-cache/
+__pycache__/
+*.pyc
+
+# Local credentials and environment overrides.
+.env
+.env.*
+!.env.example

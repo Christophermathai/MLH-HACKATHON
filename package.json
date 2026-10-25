@@ -1,0 +1,20 @@
+{
+  "name": "zoomout-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "app/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@zoomout/api",
+    "dev:all": "node scripts/dev.js",
+    "dev:frontend": "npm run dev --workspace=@zoomout/frontend",
+    "dev:api": "npm run dev --workspace=@zoomout/api",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspace=@zoomout/api --if-present"
+  }
+}
