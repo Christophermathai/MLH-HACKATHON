@@ -1,0 +1,12 @@
+{
+  "side": "A",
+  "upset_about": ["Dirty dishes left overnight in the sink"],
+  "stated_facts": ["Dishes were still there this morning when cooking started"],
+  "assumptions_made": ["They believe I should do all the chores"],
+  "possible_feelings": ["Tired", "Taken for granted"],
+  "unclear_lines": [],
+  "safety_flags": {
+    "abuse_or_coercion_signals": false,
+    "notes": ""
+  }
+}

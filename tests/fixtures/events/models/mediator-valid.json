@@ -1,0 +1,21 @@
+{
+  "what_each_is_upset_about": {
+    "A": ["Dishes left in the sink overnight"],
+    "B": ["Being nagged immediately after getting home from work"]
+  },
+  "where_interpretations_differ": [
+    "Whether dishes need washing right after eating or can wait until morning"
+  ],
+  "petty_score": 4,
+  "zoom_out": {
+    "immediate_issue": "Unwashed plates and cups",
+    "possible_underlying_feelings": [
+      "Both partners feel overwhelmed by daily domestic load"
+    ],
+    "bigger_picture": "A shared home works better when boundaries and chore timing are agreed upon calmly"
+  },
+  "truce": {
+    "next_step": "Person B clears table, Person A runs rinse cycle, together they share chai",
+    "requires_apology": false
+  }
+}

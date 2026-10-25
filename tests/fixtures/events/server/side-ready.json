@@ -1,0 +1,7 @@
+{
+  "v": 1,
+  "type": "side_ready",
+  "payload": {
+    "side": "A"
+  }
+}

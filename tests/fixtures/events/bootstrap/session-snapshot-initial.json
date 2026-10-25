@@ -1,0 +1,15 @@
+{
+  "room": "ROOM1234",
+  "side": "A",
+  "expiresAt": "2026-10-25T13:00:00.000Z",
+  "ownState": "IDLE",
+  "ownText": null,
+  "ownConfirmed": false,
+  "ownConsent": false,
+  "readiness": {
+    "A": false,
+    "B": false
+  },
+  "sessionState": "CREATED",
+  "generationId": null
+}

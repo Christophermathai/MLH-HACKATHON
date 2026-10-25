@@ -32,7 +32,28 @@ This plan adds explicit protocol details absent from the architecture. Keep the 
   - `npm run test`: passed (6/6 tests passing in api: config defaults, live credential check, origin validation, WebSocket ping/pong, origin rejection).
   - `npm run test:e2e`: passed (smoke test verifying health endpoint).
 - Deviations: None.
-- Remaining work: P2 (Define schemas and fixtures), P3 (Provide fakes and documentation).
+### 2026-10-25: Phase 2 (Define schemas and fixtures)
+- Files created/modified:
+  - `packages/contracts/src/constants.ts`: Protocol limits (`MAX_AUDIO_FRAME_BYTES`, `MAX_AUDIO_TOTAL_BYTES`, `MAX_CONTROL_JSON_BYTES`, `SESSION_LIFETIME_MS`, `LIMITS`), public error codes, enum definitions.
+  - `packages/contracts/src/errors.ts`: `PublicErrorPayloadSchema`, `ZoomOutPublicError`, `sanitizeError` (preventing internal provider or stack leaks).
+  - `packages/contracts/src/models.ts`: `AnalystSchema` (private), `MediatorSchema` (public, bounds checked, `petty_score` 0-10, `requires_apology: false`), `SafetyResultSchema`.
+  - `packages/contracts/src/bootstrap.ts`: `CreateRoomResponseSchema`, `ClaimParticipantRequestSchema`, `ClaimParticipantResponseSchema`, `SessionSnapshotSchema`, `AudioManifestSchema`, `assertNoPrivateDataInSnapshot`.
+  - `packages/contracts/src/events.ts`: `parseClientMessage`, `parseServerMessage`, `createClientMessage`, `createServerMessage`, typed envelopes, direction enforcement.
+  - `packages/contracts/src/contracts.test.ts`: 7 test suites validating AC-002-02, AC-002-03, AC-002-04, AC-002-06, EC-002-01.
+  - `packages/contracts/src/fixtures.test.ts`: Automated fixture suite testing all disk fixtures.
+  - `tests/fixtures/events/`: 23 fixture files across `bootstrap/`, `client/`, `server/`, `models/`, `audio/`.
+  - `docs/event-contract.md`: Comprehensive wire protocol, event catalogue, lifecycle, and privacy projection guide.
+- Requirements and Acceptance criteria:
+  - FR-002-02 / AC-002-02: Versioned JSON envelope `{v:1,type,payload,requestId?}` enforced. Direction swapping and unknown events fail deterministically with `BAD_EVENT`.
+  - FR-002-03 / AC-002-03: Bootstrap room creation, first claim, 409 occupied claim, and session snapshot schemas validated.
+  - FR-002-04 / AC-002-04: Model bounds enforced; `petty_score` outside 0-10 rejected; missing safety flags rejected; `requires_apology: true` rejected. `assertNoPrivateDataInSnapshot()` verifies analyst JSON is absent from snapshots.
+  - FR-002-06 / AC-002-06: Audio manifest and terminal outcomes (`verdict`, `safety`, `incomplete`) model resolved gaps and all-audio failures cleanly.
+  - EC-002-01: Malformed JSON and payloads exceeding 64 KiB rejected safely with `BAD_EVENT` / `LIMIT_EXCEEDED`.
+- Verification checks:
+  - `npm run test --workspace=@zoomout/contracts`: 12/12 passing tests.
+  - All fixtures validated against schemas.
+- Deviations: None.
+- Remaining work: P3 (Provide fakes and documentation).
 
 ## Resume pointer
 

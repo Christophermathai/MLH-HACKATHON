@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "type": "audio_chunk",
+  "payload": {
+    "seq": 0,
+    "mime": "audio/mp3",
+    "data": "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAA=",
+    "generationId": "gen-8831"
+  }
+}

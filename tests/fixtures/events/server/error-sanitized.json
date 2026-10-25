@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "type": "error",
+  "payload": {
+    "code": "BAD_EVENT",
+    "message": "Direction violation: client event cannot be sent by server",
+    "fallback": "Please check event contract"
+  }
+}

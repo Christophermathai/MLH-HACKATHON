@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "type": "confirm_transcript",
+  "payload": {
+    "text": "ഞാൻ പറഞ്ഞത് അവൻ കേട്ടില്ല.",
+    "consent": false
+  }
+}

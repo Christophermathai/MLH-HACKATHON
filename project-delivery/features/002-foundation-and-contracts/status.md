@@ -13,7 +13,7 @@ Owner: Frontend developer with backend contract review
 | Phase | Status | Evidence | Depends on |
 | --- | --- | --- | --- |
 | P1: Scaffold local services | COMPLETED | `npm run build`, `npm run typecheck`, `npm run test` (6/6 passing), `npm run test:e2e` passing. Verified mock startup without keys, live startup credential failure check, origin validation, frontend bundle purity. | None |
-| P2: Define schemas and fixtures | NOT_STARTED | None | P1 |
+| P2: Define schemas and fixtures | COMPLETED | `npm run test --workspace=@zoomout/contracts` (12/12 passing). Validated envelopes, direction swapping, bootstrap/claim schemas, model bounds, apology constraint, privacy assertions, audio gaps, and all 23 event fixtures. | P1 |
 | P3: Provide fakes and documentation | NOT_STARTED | None | P2 |
 
 ## Next action

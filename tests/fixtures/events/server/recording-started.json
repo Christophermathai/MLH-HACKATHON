@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "type": "recording_started",
+  "payload": {
+    "mode": "batch",
+    "mime": "audio/webm;codecs=opus"
+  }
+}

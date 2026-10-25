@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "type": "confirm_transcript",
+  "payload": {
+    "text": "ഞാൻ പറഞ്ഞത് അവൻ കേട്ടില്ല.",
+    "consent": true
+  },
+  "requestId": "550e8400-e29b-41d4-a716-446655440001"
+}

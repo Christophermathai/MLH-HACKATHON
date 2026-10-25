@@ -1,0 +1,17 @@
+{
+  "what_each_is_upset_about": {
+    "A": ["Dishes"],
+    "B": ["Nagging"]
+  },
+  "where_interpretations_differ": ["Timing"],
+  "petty_score": 15,
+  "zoom_out": {
+    "immediate_issue": "Dishes",
+    "possible_underlying_feelings": ["Tired"],
+    "bigger_picture": "Tiredness"
+  },
+  "truce": {
+    "next_step": "Talk tomorrow",
+    "requires_apology": false
+  }
+}

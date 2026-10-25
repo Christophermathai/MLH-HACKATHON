@@ -1,0 +1,12 @@
+{
+  "side": "B",
+  "upset_about": ["Threatening language and confinement"],
+  "stated_facts": ["Locks were changed without consent", "Threatened to cut off finances"],
+  "assumptions_made": ["No way to resolve safely without outside help"],
+  "possible_feelings": ["Afraid", "Trapped"],
+  "unclear_lines": [],
+  "safety_flags": {
+    "abuse_or_coercion_signals": true,
+    "notes": "Coercion and financial isolation signals detected."
+  }
+}

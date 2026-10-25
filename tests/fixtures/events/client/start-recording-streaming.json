@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "type": "start_recording",
+  "payload": {
+    "mode": "streaming",
+    "mime": "audio/l16",
+    "sampleRate": 16000,
+    "channels": 1,
+    "format": "pcm_s16le"
+  }
+}

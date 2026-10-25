@@ -1,0 +1,10 @@
+{
+  "totalSentences": 3,
+  "textComplete": true,
+  "entries": [
+    { "seq": 0, "status": "ready" },
+    { "seq": 1, "status": "failed", "code": "TTS_FAILED" },
+    { "seq": 2, "status": "ready" }
+  ],
+  "generationId": "gen-8831"
+}

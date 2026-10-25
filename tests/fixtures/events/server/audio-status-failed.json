@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "type": "audio_status",
+  "payload": {
+    "seq": 1,
+    "status": "failed",
+    "code": "TTS_FAILED",
+    "generationId": "gen-8831"
+  }
+}

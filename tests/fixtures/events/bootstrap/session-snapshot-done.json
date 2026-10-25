@@ -1,0 +1,42 @@
+{
+  "room": "ROOM1234",
+  "side": "A",
+  "expiresAt": "2026-10-25T13:00:00.000Z",
+  "ownState": "READY",
+  "ownText": "He never helps wash the plates after dinner.",
+  "ownConfirmed": true,
+  "ownConsent": true,
+  "readiness": {
+    "A": true,
+    "B": true
+  },
+  "sessionState": "DONE",
+  "generationId": "gen-8831",
+  "sharedResult": {
+    "what_each_is_upset_about": {
+      "A": ["Plates left dirty"],
+      "B": ["Being instructed immediately after coming home"]
+    },
+    "where_interpretations_differ": ["Whether waiting 30 minutes before washing is acceptable"],
+    "petty_score": 3,
+    "zoom_out": {
+      "immediate_issue": "Dishes in sink",
+      "possible_underlying_feelings": ["Exhaustion and wanting recognition"],
+      "bigger_picture": "Both are tired and wanting a calm evening together"
+    },
+    "truce": {
+      "next_step": "A washes plates tonight, B makes chai tomorrow morning",
+      "requires_apology": false
+    }
+  },
+  "verdictText": "Court is in session. Both parties care deeply about clean cups. Verdict: share a snack, no sulking.",
+  "outcome": "verdict",
+  "audioManifest": {
+    "totalSentences": 2,
+    "textComplete": true,
+    "entries": [
+      { "seq": 0, "status": "ready" },
+      { "seq": 1, "status": "ready" }
+    ]
+  }
+}
