@@ -7,6 +7,9 @@ export interface ServerConfig {
   host: string;
   providerMode: "mock" | "live";
   allowedOrigins: string[];
+  llmApiKey?: string;
+  llmBaseUrl?: string;
+  llmModel?: string;
   openaiApiKey?: string;
   elevenlabsApiKey?: string;
   elevenlabsVoiceId?: string;
@@ -27,13 +30,43 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     .map((o) => o.trim())
     .filter(Boolean);
 
-  const openaiApiKey = env.OPENAI_API_KEY?.trim() || undefined;
+  const llmApiKey = (
+    env.LLM_API_KEY ||
+    env.DIGITALOCEAN_ACCESS_TOKEN ||
+    env.DO_ACCESS_TOKEN ||
+    env.GEMINI_API_KEY ||
+    env.GROQ_API_KEY ||
+    env.OPENAI_API_KEY
+  )?.trim() || undefined;
+
+  const llmBaseUrl = (
+    env.LLM_BASE_URL ||
+    (env.DIGITALOCEAN_ACCESS_TOKEN || env.DO_ACCESS_TOKEN ? "https://inference.do-ai.run/v1" : undefined) ||
+    (env.GROQ_API_KEY ? "https://api.groq.com/openai/v1" : undefined) ||
+    (env.GEMINI_API_KEY ? "https://generativelanguage.googleapis.com/v1beta/openai" : undefined) ||
+    (env.OLLAMA_BASE_URL ? env.OLLAMA_BASE_URL : undefined) ||
+    "https://api.openai.com/v1"
+  ).trim();
+
+  const llmModel = (
+    env.LLM_MODEL ||
+    (env.DIGITALOCEAN_ACCESS_TOKEN || env.DO_ACCESS_TOKEN ? "google/gemma-2-9b-it" : undefined) ||
+    (env.GROQ_API_KEY ? "gemma2-9b-it" : undefined) ||
+    (env.GEMINI_API_KEY ? "gemma-2-9b-it" : undefined) ||
+    (env.OLLAMA_BASE_URL ? "gemma2" : undefined) ||
+    "gemma-2-9b-it"
+  ).trim();
+
+  const openaiApiKey = env.OPENAI_API_KEY?.trim() || llmApiKey;
   const elevenlabsApiKey = env.ELEVENLABS_API_KEY?.trim() || undefined;
   const elevenlabsVoiceId = env.ELEVENLABS_VOICE_ID?.trim() || undefined;
 
   if (providerMode === "live") {
     const missing: string[] = [];
-    if (!openaiApiKey) missing.push("OPENAI_API_KEY");
+    const isLocalOllama = llmBaseUrl.includes("11434");
+    if (!llmApiKey && !isLocalOllama) {
+      missing.push("OPENAI_API_KEY");
+    }
     if (!elevenlabsApiKey) missing.push("ELEVENLABS_API_KEY");
     if (missing.length > 0) {
       throw new Error(
@@ -47,6 +80,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     host,
     providerMode,
     allowedOrigins,
+    llmApiKey,
+    llmBaseUrl,
+    llmModel,
     openaiApiKey,
     elevenlabsApiKey,
     elevenlabsVoiceId,

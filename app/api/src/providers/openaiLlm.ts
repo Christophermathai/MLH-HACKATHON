@@ -25,10 +25,32 @@ export class OpenAiLlmProvider
 {
   private apiKey: string;
   private model: string;
+  private baseUrl: string;
 
-  constructor(options: { apiKey?: string; model?: string } = {}) {
-    this.apiKey = options.apiKey ?? process.env.OPENAI_API_KEY ?? "";
-    this.model = options.model ?? "gpt-4o-mini";
+  constructor(options: { apiKey?: string; model?: string; baseUrl?: string } = {}) {
+    this.apiKey =
+      options.apiKey ??
+      process.env.LLM_API_KEY ??
+      process.env.GEMINI_API_KEY ??
+      process.env.GROQ_API_KEY ??
+      process.env.OPENAI_API_KEY ??
+      "";
+    this.baseUrl =
+      options.baseUrl ??
+      process.env.LLM_BASE_URL ??
+      (process.env.GROQ_API_KEY
+        ? "https://api.groq.com/openai/v1"
+        : process.env.GEMINI_API_KEY
+        ? "https://generativelanguage.googleapis.com/v1beta/openai"
+        : "https://api.openai.com/v1");
+    this.model =
+      options.model ??
+      process.env.LLM_MODEL ??
+      (process.env.GROQ_API_KEY
+        ? "gemma2-9b-it"
+        : process.env.GEMINI_API_KEY
+        ? "gemma-2-9b-it"
+        : "gemma-2-9b-it");
   }
 
   private async fetchChatCompletion(
@@ -36,8 +58,9 @@ export class OpenAiLlmProvider
     jsonMode = false,
     signal?: AbortSignal
   ): Promise<string> {
-    if (!this.apiKey) {
-      throw new ZoomOutPublicError("MODEL_FAILED", "OpenAI API key not configured");
+    const isLocalOllama = this.baseUrl.includes("11434");
+    if (!this.apiKey && !isLocalOllama) {
+      throw new ZoomOutPublicError("MODEL_FAILED", "LLM API key not configured");
     }
 
     const payload: any = {
@@ -49,28 +72,43 @@ export class OpenAiLlmProvider
       payload.response_format = { type: "json_object" };
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const endpoint = `${this.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+    let response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
+        ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
       },
       body: JSON.stringify(payload),
       signal,
     });
 
+    // If provider rejected response_format json_object, retry without response_format
+    if (!response.ok && jsonMode) {
+      delete payload.response_format;
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+        },
+        body: JSON.stringify(payload),
+        signal,
+      });
+    }
+
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
       throw new ZoomOutPublicError(
         "MODEL_FAILED",
-        `OpenAI request failed (${response.status}): ${errText.slice(0, 200)}`
+        `LLM request (${this.model}) failed (${response.status}): ${errText.slice(0, 200)}`
       );
     }
 
     const data = (await response.json()) as any;
     const content = data.choices?.[0]?.message?.content;
     if (!content) {
-      throw new ZoomOutPublicError("MODEL_FAILED", "OpenAI returned empty message content");
+      throw new ZoomOutPublicError("MODEL_FAILED", `LLM model (${this.model}) returned empty message content`);
     }
     return content;
   }

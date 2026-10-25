@@ -92,13 +92,19 @@ export function createGatewayServer(
 
   // Initialize pipeline providers based on mode or overrides
   const isLive = config.providerMode === "live";
-  const openaiProvider = isLive && config.openaiApiKey ? new OpenAiLlmProvider({ apiKey: config.openaiApiKey }) : null;
+  const llmProvider = isLive && (config.llmApiKey || config.openaiApiKey || config.llmBaseUrl?.includes("11434"))
+    ? new OpenAiLlmProvider({
+        apiKey: config.llmApiKey || config.openaiApiKey,
+        baseUrl: config.llmBaseUrl,
+        model: config.llmModel,
+      })
+    : null;
   const elevenlabsTts = isLive && config.elevenlabsApiKey ? new ElevenLabsTtsProvider({ apiKey: config.elevenlabsApiKey, voiceId: config.elevenlabsVoiceId }) : null;
 
   const providers: PipelineProviders = {
-    analyst: customProviders?.analyst ?? openaiProvider ?? new FakeAnalystProvider(),
-    mediator: customProviders?.mediator ?? openaiProvider ?? new FakeMediatorProvider(),
-    judge: customProviders?.judge ?? openaiProvider ?? new FakeJudgeStreamProvider(),
+    analyst: customProviders?.analyst ?? llmProvider ?? new FakeAnalystProvider(),
+    mediator: customProviders?.mediator ?? llmProvider ?? new FakeMediatorProvider(),
+    judge: customProviders?.judge ?? llmProvider ?? new FakeJudgeStreamProvider(),
     tts: customProviders?.tts ?? elevenlabsTts ?? new FakeTtsProvider(),
   };
 
