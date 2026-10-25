@@ -37,16 +37,18 @@ export function SessionView({
     if (process.env.NEXT_PUBLIC_GATEWAY_WS_URL) return process.env.NEXT_PUBLIC_GATEWAY_WS_URL;
     if (typeof window === "undefined") return "ws://127.0.0.1:8787/ws";
 
-    const { protocol, hostname } = window.location;
-    if (protocol === "https:") {
-      // Dev Tunnels port mapping: zv6qqrb7-3000.inc1.devtunnels.ms -> zv6qqrb7-8787.inc1.devtunnels.ms
-      if (hostname.includes("devtunnels.ms")) {
-        const wsTunnelHost = hostname.replace(/-3000(\.|$)/, "-8787$1");
-        return `wss://${wsTunnelHost}/ws`;
-      }
-      return `wss://${hostname}:8787/ws`;
+    const { protocol, host, hostname } = window.location;
+    const wsProto = protocol === "https:" ? "wss:" : "ws:";
+
+    // If using Dev Tunnels with separate forwarded port 8787
+    if (hostname.includes("devtunnels.ms")) {
+      const wsTunnelHost = hostname.replace(/-3000(\.|$)/, "-8787$1");
+      return `wss://${wsTunnelHost}/ws`;
     }
-    return `ws://${hostname}:8787/ws`;
+
+    // Default: use same host /ws (proxied seamlessly by Next.js to backend port 8787)
+    // Works out-of-the-box for ngrok, localhost, and LAN connections!
+    return `${wsProto}//${host}/ws`;
   };
 
   const resolvedWsUrl = getResolvedWsUrl();

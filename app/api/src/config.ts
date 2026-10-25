@@ -70,7 +70,8 @@ export function isOriginAllowed(origin: string | undefined, allowedOrigins: stri
       host.startsWith("10.") ||
       host.startsWith("172.") ||
       host.endsWith(".devtunnels.ms") ||
-      host === "devtunnels.ms"
+      host === "devtunnels.ms" ||
+      host.includes("ngrok")
     ) {
       return true;
     }
