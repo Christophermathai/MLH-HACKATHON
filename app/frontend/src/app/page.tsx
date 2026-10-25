@@ -1,51 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { ModelLab } from "@/components/ModelLab";
+import Link from "next/link";
 import { SessionView } from "@/features/session/SessionView";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"court" | "lab">("court");
-
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Top Application Switcher Bar */}
-      <nav className="border-b bg-card px-6 py-2 flex items-center justify-between text-xs">
+      {/* Top Application Header */}
+      <header className="border-b bg-card/60 backdrop-blur px-6 py-2.5 flex items-center justify-between text-xs sticky top-0 z-20">
         <div className="flex items-center space-x-2">
-          <span className="font-extrabold tracking-tight text-sm text-primary">ZoomOut</span>
-          <span className="text-muted-foreground">· Petty Dispute Court</span>
+          <span className="font-extrabold tracking-tight text-base text-primary">ZoomOut</span>
+          <span className="text-muted-foreground font-medium">· Malayalam Petty Dispute Court</span>
         </div>
 
-        <div className="flex items-center space-x-1 bg-muted p-1 rounded-lg">
-          <button
-            type="button"
-            onClick={() => setActiveTab("court")}
-            className={`py-1 px-3 rounded-md font-semibold transition ${
-              activeTab === "court"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+        <div className="flex items-center space-x-4">
+          <Link
+            href="/lab"
+            className="text-muted-foreground hover:text-foreground text-xs font-medium underline underline-offset-4 transition"
           >
-            Court Session (Live Flow)
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("lab")}
-            className={`py-1 px-3 rounded-md font-semibold transition ${
-              activeTab === "lab"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Speech Model Lab
-          </button>
+            Model Usability Lab →
+          </Link>
         </div>
-      </nav>
+      </header>
 
-      {/* Main Surface */}
-      <div className="flex-1">
-        {activeTab === "court" ? <SessionView /> : <ModelLab />}
-      </div>
+      {/* Main Surface: Full ZoomOut Court App */}
+      <main className="flex-1">
+        <SessionView />
+      </main>
     </div>
   );
 }
