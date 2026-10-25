@@ -21,3 +21,4 @@ export default function LabPage() {
     </div>
   );
 }
+
