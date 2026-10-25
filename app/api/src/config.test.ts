@@ -44,5 +44,6 @@ test("isOriginAllowed validates allowed origins and rejects untrusted origins", 
   assert.equal(isOriginAllowed(undefined, allowed), true);
   assert.equal(isOriginAllowed("http://localhost:3000", allowed), true);
   assert.equal(isOriginAllowed("http://127.0.0.1:3000", allowed), true);
+  assert.equal(isOriginAllowed("https://zv6qqrb7-3000.inc1.devtunnels.ms", allowed), true);
   assert.equal(isOriginAllowed("http://malicious-site.com", allowed), false);
 });

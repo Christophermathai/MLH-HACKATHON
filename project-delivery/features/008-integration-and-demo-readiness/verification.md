@@ -87,3 +87,4 @@
 - Feasibility test desk is safely accessible at `/lab`.
 - Automated test coverage guards privacy, safety branching, audio playback, and reconnect recovery.
 - Both Live Mode (ElevenLabs + OpenAI) and Offline Mock Mode are fully supported.
+

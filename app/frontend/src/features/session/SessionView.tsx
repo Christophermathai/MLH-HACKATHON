@@ -20,9 +20,36 @@ interface SessionViewProps {
 }
 
 export function SessionView({
-  gatewayHttpUrl = process.env.NEXT_PUBLIC_GATEWAY_HTTP_URL || "http://127.0.0.1:8787",
-  gatewayWsUrl = process.env.NEXT_PUBLIC_GATEWAY_WS_URL || "ws://127.0.0.1:8787/ws",
+  gatewayHttpUrl,
+  gatewayWsUrl,
 }: SessionViewProps) {
+  // Dynamically resolve gateway URLs based on current browser host (e.g. 192.168.0.147 or localhost or devtunnels.ms)
+  const currentHost = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
+  
+  // Use relative /gateway proxy to avoid Mixed Content when hosted over HTTPS / Dev Tunnels
+  const resolvedHttpUrl =
+    gatewayHttpUrl ||
+    process.env.NEXT_PUBLIC_GATEWAY_HTTP_URL ||
+    (typeof window !== "undefined" ? "/gateway" : `http://${currentHost}:8787`);
+
+  const getResolvedWsUrl = () => {
+    if (gatewayWsUrl) return gatewayWsUrl;
+    if (process.env.NEXT_PUBLIC_GATEWAY_WS_URL) return process.env.NEXT_PUBLIC_GATEWAY_WS_URL;
+    if (typeof window === "undefined") return "ws://127.0.0.1:8787/ws";
+
+    const { protocol, hostname } = window.location;
+    if (protocol === "https:") {
+      // Dev Tunnels port mapping: zv6qqrb7-3000.inc1.devtunnels.ms -> zv6qqrb7-8787.inc1.devtunnels.ms
+      if (hostname.includes("devtunnels.ms")) {
+        const wsTunnelHost = hostname.replace(/-3000(\.|$)/, "-8787$1");
+        return `wss://${wsTunnelHost}/ws`;
+      }
+      return `wss://${hostname}:8787/ws`;
+    }
+    return `ws://${hostname}:8787/ws`;
+  };
+
+  const resolvedWsUrl = getResolvedWsUrl();
   // Session Identity
   const [room, setRoom] = useState<string | null>(null);
   const [side, setSide] = useState<Side | null>(null);
@@ -71,7 +98,7 @@ export function SessionView({
     setIsCreatingRoom(true);
     setConnectionError(null);
     try {
-      const res = await fetch(`${gatewayHttpUrl}/api/rooms`, { method: "POST" });
+      const res = await fetch(`${resolvedHttpUrl}/api/rooms`, { method: "POST" });
       if (!res.ok) throw new Error(`Failed to create room (${res.status})`);
       const data = await res.json();
       setRoom(data.room);
@@ -93,7 +120,7 @@ export function SessionView({
     setIsCreatingRoom(true);
     setConnectionError(null);
     try {
-      const res = await fetch(`${gatewayHttpUrl}/api/rooms/${code}/participants`, {
+      const res = await fetch(`${resolvedHttpUrl}/api/rooms/${code}/participants`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ side: "B" }),
@@ -117,132 +144,162 @@ export function SessionView({
   useEffect(() => {
     if (!room || !side || !resumeToken) return;
 
-    const ws = new WebSocket(gatewayWsUrl);
-    socketRef.current = ws;
+    let isSubscribed = true;
+    let retryTimer: NodeJS.Timeout | null = null;
+    let ws: WebSocket | null = null;
 
-    ws.onopen = () => {
-      setIsConnected(true);
-      setConnectionError(null);
-      // Send join
-      ws.send(
-        JSON.stringify({
-          v: 1,
-          type: "join",
-          payload: { room, side, resumeToken },
-        })
-      );
-    };
-
-    ws.onmessage = (event) => {
+    const connect = () => {
+      if (!isSubscribed) return;
       try {
-        const msg = JSON.parse(event.data);
+        ws = new WebSocket(resolvedWsUrl);
+        socketRef.current = ws;
 
-        switch (msg.type) {
-          case "session_snapshot": {
-            const snap = msg.payload as SessionSnapshot;
-            setSessionState(snap.sessionState);
-            setOwnState(snap.ownState);
-            setIsConfirmed(snap.ownConfirmed);
-            if (snap.ownText) setTranscript(snap.ownText);
-            const otherSide = side === "A" ? "B" : "A";
-            setIsOtherSideReady(snap.readiness[otherSide]);
-            if (snap.sharedResult) setMediatorResult(snap.sharedResult);
-            if (snap.verdictText) setVerdictText(snap.verdictText);
-            if (snap.outcome) setOutcome(snap.outcome);
-            if (snap.audioManifest) setAudioManifest(snap.audioManifest);
-            break;
-          }
+        ws.onopen = () => {
+          if (!isSubscribed) return;
+          setIsConnected(true);
+          setConnectionError(null);
+          // Send join
+          ws?.send(
+            JSON.stringify({
+              v: 1,
+              type: "join",
+              payload: { room, side, resumeToken },
+            })
+          );
+        };
 
-          case "final_transcript": {
-            setTranscript(msg.payload.text || "");
-            if (msg.payload.unclear_lines) setUnclearLines(msg.payload.unclear_lines);
-            setOwnState("REVIEW");
-            break;
-          }
+        ws.onmessage = (event) => {
+          if (!isSubscribed) return;
+          try {
+            const msg = JSON.parse(event.data);
 
-          case "side_ready": {
-            if (msg.payload.side === side) {
-              setIsConfirmed(true);
-              setOwnState("READY");
-            } else {
-              setIsOtherSideReady(true);
+            switch (msg.type) {
+              case "session_snapshot": {
+                const snap = msg.payload as SessionSnapshot;
+                setSessionState(snap.sessionState);
+                setOwnState(snap.ownState);
+                setIsConfirmed(snap.ownConfirmed);
+                if (snap.ownText) setTranscript(snap.ownText);
+                const otherSide = side === "A" ? "B" : "A";
+                setIsOtherSideReady(snap.readiness[otherSide]);
+                if (snap.sharedResult) setMediatorResult(snap.sharedResult);
+                if (snap.verdictText) setVerdictText(snap.verdictText);
+                if (snap.outcome) setOutcome(snap.outcome);
+                if (snap.audioManifest) setAudioManifest(snap.audioManifest);
+                break;
+              }
+
+              case "final_transcript": {
+                setTranscript(msg.payload.text || "");
+                if (msg.payload.unclear_lines) setUnclearLines(msg.payload.unclear_lines);
+                setOwnState("REVIEW");
+                break;
+              }
+
+              case "side_ready": {
+                if (msg.payload.side === side) {
+                  setIsConfirmed(true);
+                  setOwnState("READY");
+                } else {
+                  setIsOtherSideReady(true);
+                }
+                break;
+              }
+
+              case "both_ready": {
+                setIsOtherSideReady(true);
+                setSessionState("BOTH_READY");
+                break;
+              }
+
+              case "analysis_json": {
+                setMediatorResult(msg.payload);
+                setSessionState("MEDIATING");
+                break;
+              }
+
+              case "verdict_text_delta": {
+                setVerdictText((prev) => prev + msg.payload.text);
+                setSessionState("JUDGING");
+                break;
+              }
+
+              case "safety_result": {
+                setSafetyResult(msg.payload);
+                setSessionState("DONE");
+                setOutcome("safety");
+                break;
+              }
+
+              case "audio_chunk": {
+                const chunk: AudioChunk = {
+                  seq: msg.payload.seq,
+                  mime: msg.payload.mime,
+                  data: msg.payload.data,
+                };
+                setAudioChunks((prev) => {
+                  const next = new Map(prev);
+                  next.set(chunk.seq, chunk);
+                  return next;
+                });
+                break;
+              }
+
+              case "audio_manifest": {
+                setAudioManifest(msg.payload);
+                break;
+              }
+
+              case "done": {
+                setOutcome(msg.payload.outcome);
+                setSessionState("DONE");
+                break;
+              }
+
+              case "error": {
+                setConnectionError(msg.payload.message || msg.payload.code || "Server error");
+                break;
+              }
             }
-            break;
+          } catch (err: any) {
+            console.error("Failed to parse server message:", err);
           }
+        };
 
-          case "both_ready": {
-            setIsOtherSideReady(true);
-            setSessionState("BOTH_READY");
-            break;
-          }
+        ws.onerror = () => {
+          if (!isSubscribed) return;
+          const isDevTunnels = typeof window !== "undefined" && window.location.hostname.includes("devtunnels.ms");
+          setConnectionError(
+            isDevTunnels
+              ? `Connecting to WebSocket at ${resolvedWsUrl}... If this fails, ensure port 8787 is forwarded and set to Public in VS Code Ports tab.`
+              : `WebSocket connection error (${resolvedWsUrl})`
+          );
+        };
 
-          case "analysis_json": {
-            setMediatorResult(msg.payload);
-            setSessionState("MEDIATING");
-            break;
+        ws.onclose = (event) => {
+          if (!isSubscribed) return;
+          setIsConnected(false);
+          // If not closed cleanly, retry in 2.5s
+          if (event.code !== 1000) {
+            retryTimer = setTimeout(connect, 2500);
           }
-
-          case "verdict_text_delta": {
-            setVerdictText((prev) => prev + msg.payload.text);
-            setSessionState("JUDGING");
-            break;
-          }
-
-          case "safety_result": {
-            setSafetyResult(msg.payload);
-            setSessionState("DONE");
-            setOutcome("safety");
-            break;
-          }
-
-          case "audio_chunk": {
-            const chunk: AudioChunk = {
-              seq: msg.payload.seq,
-              mime: msg.payload.mime,
-              data: msg.payload.data,
-            };
-            setAudioChunks((prev) => {
-              const next = new Map(prev);
-              next.set(chunk.seq, chunk);
-              return next;
-            });
-            break;
-          }
-
-          case "audio_manifest": {
-            setAudioManifest(msg.payload);
-            break;
-          }
-
-          case "done": {
-            setOutcome(msg.payload.outcome);
-            setSessionState("DONE");
-            break;
-          }
-
-          case "error": {
-            setConnectionError(msg.payload.message || msg.payload.code || "Server error");
-            break;
-          }
-        }
+        };
       } catch (err: any) {
-        console.error("Failed to parse server message:", err);
+        setConnectionError(err?.message || "Failed to create WebSocket connection");
       }
     };
 
-    ws.onerror = () => {
-      setConnectionError("WebSocket connection error");
-    };
-
-    ws.onclose = () => {
-      setIsConnected(false);
-    };
+    connect();
 
     return () => {
-      ws.close();
+      isSubscribed = false;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (ws) {
+        ws.close(1000);
+      }
       socketRef.current = null;
     };
-  }, [room, side, resumeToken, gatewayWsUrl]);
+  }, [room, side, resumeToken, resolvedWsUrl]);
 
   // Audio Chunk Sender for Recording Screen
   const handleSendAudioChunk = async (chunk: Uint8Array) => {
@@ -341,8 +398,13 @@ export function SessionView({
         </div>
 
         {connectionError && (
-          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded text-xs text-red-600 dark:text-red-300">
-            {connectionError}
+          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded text-xs text-red-600 dark:text-red-300 space-y-1.5">
+            <p className="font-semibold">{connectionError}</p>
+            {typeof window !== "undefined" && window.location.hostname.includes("devtunnels.ms") && (
+              <p className="text-[11px] opacity-90">
+                💡 <strong>Dev Tunnels Setup:</strong> Ensure port <strong>8787</strong> is forwarded in VS Code Ports tab and set to <strong>Public</strong> visibility.
+              </p>
+            )}
           </div>
         )}
 
@@ -436,6 +498,12 @@ export function SessionView({
           </button>
         </div>
       </header>
+
+      {!isConnected && connectionError && (
+        <aside className="bg-amber-500/10 border-b border-amber-500/20 py-2 px-6 text-xs text-amber-700 dark:text-amber-300 text-center font-medium">
+          {connectionError}
+        </aside>
+      )}
 
       {/* Share room code banner for Side A when Side B hasn't joined */}
       {side === "A" && !isOtherSideReady && !isPostConsent && (

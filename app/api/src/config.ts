@@ -57,5 +57,23 @@ export function isOriginAllowed(origin: string | undefined, allowedOrigins: stri
   if (!origin) {
     return true;
   }
-  return allowedOrigins.includes(origin);
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+  try {
+    const url = new URL(origin);
+    const host = url.hostname;
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.startsWith("192.168.") ||
+      host.startsWith("10.") ||
+      host.startsWith("172.") ||
+      host.endsWith(".devtunnels.ms") ||
+      host === "devtunnels.ms"
+    ) {
+      return true;
+    }
+  } catch {}
+  return false;
 }

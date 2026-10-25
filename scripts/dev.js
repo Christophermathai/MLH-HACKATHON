@@ -5,7 +5,7 @@ const api = spawn("npm", ["run", "dev", "--workspace=@zoomout/api"], {
   shell: true,
 });
 
-const frontend = spawn("npm", ["run", "dev", "--workspace=@zoomout/frontend"], {
+const frontend = spawn("npm", ["run", "dev", "--workspace=zoomout-model-lab"], {
   stdio: "inherit",
   shell: true,
 });

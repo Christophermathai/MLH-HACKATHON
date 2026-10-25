@@ -93,3 +93,4 @@ This runbook guides a seamless, repeatable 3-minute live demonstration of ZoomOu
 - **Noisy Venue / Audio Off:** The full Malayalam transcript and judge text are displayed visually in real-time.
 - **Safety Gate:** If someone submits a testimony mentioning domestic abuse or violence, the system immediately halts the playful court, suppresses the judge/TTS, and displays a calm, non-accusatory care recommendation in Malayalam and English.
 - **Microphone Denied:** Both participants have a one-click fallback to type their testimony directly.
+

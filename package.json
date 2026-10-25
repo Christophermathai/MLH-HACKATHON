@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm run dev --workspace=@zoomout/api",
     "dev:all": "node scripts/dev.js",
-    "dev:frontend": "npm run dev --workspace=@zoomout/frontend",
+    "dev:frontend": "npm run dev --workspace=zoomout-model-lab",
     "dev:api": "npm run dev --workspace=@zoomout/api",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
