@@ -82,14 +82,14 @@ Exit: record commands or manual evidence and outcomes in implementation-notes.md
 
 | Requirement | Acceptance | Phase | Current evidence |
 | --- | --- | --- | --- |
-| FR-004-01 | AC-004-01 | P1 | `RecordScreen.tsx` and `useAudioRecorder.ts` provide mic permission handling with instant typed review escape. Verified via frontend build and unit tests. |
-| FR-004-02 | AC-004-02 | P1 | `AudioReceiver` enforces MIME verification, 32 KiB/frame, 5 MiB ceiling, and 60s timer limit. Verified in `audioReceiver.test.ts`. |
-| FR-004-03 | AC-004-03 | P1 | `WhisperSttProvider` and `FakeSttProvider` deliver `final_transcript` to owner socket only; other side receives nothing; no analyst runs until confirmation. Verified in `audioExchange.test.ts`. |
-| FR-004-04 | AC-004-04 | P3 | DEFERRED (Batch MVP completed; streaming extension deferred). |
-| FR-004-05 | AC-004-05 | P3 | DEFERRED (Batch MVP completed; streaming extension deferred). |
-| FR-004-06 | AC-004-06 | P2 | Empty/silent audio returns editable placeholder `[ശബ്ദം വ്യക്തമല്ല / No speech detected]` without granting consent. Verified in `audioReceiver.test.ts`. |
-| FR-004-07 | AC-004-07 | P2 | Stops mic tracks immediately on stop/cancel/unmount; purges raw audio buffers from memory and temp disk immediately after transcription or failure. Verified in `audioReceiver.test.ts` and `audioExchange.test.ts`. |
-| FR-004-08 | AC-004-08 | P2 | Normalizes STT failures with retry path; unique `recordingId` prevents stale in-flight responses from overwriting active state. Verified in `audioReceiver.test.ts`. |
+| FR-004-01 | AC-004-01 | P1 | Not implemented / not run |
+| FR-004-02 | AC-004-02 | P1 | Not implemented / not run |
+| FR-004-03 | AC-004-03 | P1 | Not implemented / not run |
+| FR-004-04 | AC-004-04 | P3 | Not implemented / not run |
+| FR-004-05 | AC-004-05 | P3 | Not implemented / not run |
+| FR-004-06 | AC-004-06 | P2 | Not implemented / not run |
+| FR-004-07 | AC-004-07 | P2 | Not implemented / not run |
+| FR-004-08 | AC-004-08 | P2 | Not implemented / not run |
 
 ## Verification execution
 

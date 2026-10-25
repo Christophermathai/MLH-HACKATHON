@@ -5,7 +5,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { devanagariToMalayalam } from "@zoomout/contracts";
-import { manifestPath, whisperScriptPath } from "@/lib/serverPaths";
+import { manifestPath, resolveElevenLabsConfig, whisperScriptPath } from "@/lib/serverPaths";
 import type { Manifest, TranscriptionResult } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -28,32 +28,79 @@ function normalizedAudioType(type: string) {
   return type.split(";", 1)[0].trim().toLowerCase();
 }
 
+async function runElevenLabsStt(
+  audioBytes: ArrayBuffer,
+  audioType: string,
+  fileName: string,
+  apiKey: string,
+  modelId: string,
+  languageCode: string,
+): Promise<TranscriptionResult> {
+  const upstreamForm = new FormData();
+  upstreamForm.append("model_id", modelId);
+  upstreamForm.append("language_code", languageCode);
+  upstreamForm.append("file", new Blob([audioBytes], { type: audioType }), fileName);
+
+  const started = performance.now();
+  const response = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+    method: "POST",
+    headers: {
+      "xi-api-key": apiKey,
+    },
+    body: upstreamForm,
+  });
+  const elapsedSeconds = Number(((performance.now() - started) / 1000).toFixed(3));
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(
+      `ElevenLabs STT failed (${response.status}): ${errorText.slice(0, 300) || response.statusText}`,
+    );
+  }
+
+  const payload = (await response.json()) as { text?: string };
+  return {
+    mode: "live",
+    model: `elevenlabs/${modelId}`,
+    text: (payload.text ?? "").trim(),
+    elapsedSeconds,
+  };
+}
+
 function runPython(audioPath: string, sampleId: string) {
   return new Promise<TranscriptionResult>((resolve, reject) => {
     const executable = process.env.WHISPER_PYTHON ?? "python";
-    const child = spawn(/* turbopackIgnore: true */ executable, [whisperScriptPath(), "--audio", audioPath, "--sample-id", sampleId, "--stdout"], {
-      windowsHide: true,
-      env: { ...process.env, PYTHONUTF8: "1" },
-    });
+    const child = spawn(
+      /* turbopackIgnore: true */ executable,
+      [whisperScriptPath(), "--audio", audioPath, "--sample-id", sampleId, "--stdout"],
+      {
+        windowsHide: true,
+        env: { ...process.env, PYTHONUTF8: "1" },
+      },
+    );
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
       child.kill();
-      reject(new Error("Whisper timed out after ten minutes."));
+      reject(new Error("Transcription timed out after ten minutes."));
     }, 10 * 60 * 1000);
-    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
-    child.stderr.on("data", (chunk: Buffer) => { stderr = `${stderr}${chunk.toString("utf8")}`.slice(-4000); });
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr = `${stderr}${chunk.toString("utf8")}`.slice(-4000);
+    });
     child.once("error", (error) => {
       clearTimeout(timer);
       reject(error);
     });
     child.once("exit", (code) => {
       clearTimeout(timer);
-      if (code !== 0) return reject(new Error(stderr || `Whisper exited with code ${code}`));
+      if (code !== 0) return reject(new Error(stderr || `Runner exited with code ${code}`));
       try {
         resolve(JSON.parse(stdout) as TranscriptionResult);
       } catch {
-        reject(new Error("Whisper returned an invalid response."));
+        reject(new Error("Runner returned an invalid response."));
       }
     });
   });
@@ -71,13 +118,19 @@ export async function POST(request: Request) {
     const audioType = normalizedAudioType(audio.type);
     const extension = AUDIO_EXTENSIONS.get(audioType);
     if (!extension) {
-      return NextResponse.json({ error: `Unsupported audio format (${audioType || "unknown"}). Use WAV, WebM, OGG, MP3, M4A, or AAC.` }, { status: 400 });
+      return NextResponse.json(
+        { error: `Unsupported audio format (${audioType || "unknown"}). Use WAV, WebM, OGG, MP3, M4A, or AAC.` },
+        { status: 400 },
+      );
     }
     if (audio.size === 0) {
       return NextResponse.json({ error: "The selected audio file is empty." }, { status: 400 });
     }
     if (audio.size > MAX_AUDIO_BYTES) {
-      return NextResponse.json({ error: `Audio is ${(audio.size / 1024 / 1024).toFixed(1)} MiB; the test limit is 5 MiB.` }, { status: 400 });
+      return NextResponse.json(
+        { error: `Audio is ${(audio.size / 1024 / 1024).toFixed(1)} MiB; the test limit is 5 MiB.` },
+        { status: 400 },
+      );
     }
     const manifest = JSON.parse(await readFile(manifestPath(), "utf8")) as Manifest;
     const sample = manifest.samples.find((candidate) => candidate.id === sampleId);
@@ -91,6 +144,21 @@ export async function POST(request: Request) {
         elapsedSeconds: 0.42,
         warning: "Simulated response for interface testing. Do not use as model evidence.",
       };
+      return NextResponse.json(result);
+    }
+
+    const elevenLabs = await resolveElevenLabsConfig();
+    if (elevenLabs.apiKey) {
+      const audioBytes = await audio.arrayBuffer();
+      const fileName = audio.name || `zoomout-${sampleId}${extension}`;
+      const result = await runElevenLabsStt(
+        audioBytes,
+        audioType,
+        fileName,
+        elevenLabs.apiKey,
+        elevenLabs.modelId,
+        elevenLabs.languageCode,
+      );
       return NextResponse.json(result);
     }
 

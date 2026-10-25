@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "language": "ml-IN",
+  "model": "openai/whisper-large-v3",
+  "audioPolicy": "Only synthetic or explicitly consented audio may be used. Private audio stays under samples-private and is never committed.",
+  "samples": [
+    {
+      "id": "ml-only",
+      "scenario": "Malayalam-only everyday speech",
+      "audioPath": "samples-private/ml-only.wav",
+      "referenceText": "ഇന്ന് ചായ ഉണ്ടാക്കാമെന്ന് പറഞ്ഞിട്ട് നീ മറന്നുപോയി.",
+      "expectedDurationSeconds": 5,
+      "durationSeconds": null,
+      "provenance": "synthetic script; audio pending",
+      "permission": "synthetic-only",
+      "status": "audio-required"
+    },
+    {
+      "id": "ml-en-code-switch",
+      "scenario": "Malayalam-English code switching",
+      "audioPath": "samples-private/ml-en-code-switch.wav",
+      "referenceText": "ഞാൻ message അയച്ചപ്പോൾ നീ seen ആക്കി reply ചെയ്തില്ല.",
+      "expectedDurationSeconds": 6,
+      "durationSeconds": null,
+      "provenance": "synthetic script; audio pending",
+      "permission": "synthetic-only",
+      "status": "audio-required"
+    },
+    {
+      "id": "hesitation",
+      "scenario": "Hesitation and an intentionally unclear phrase",
+      "audioPath": "samples-private/hesitation.wav",
+      "referenceText": "അത്... ഞാൻ പറഞ്ഞത് പാത്രം ഇപ്പോൾ കഴുകണം എന്നല്ല, പിന്നെ മതി എന്നാണ്.",
+      "expectedDurationSeconds": 8,
+      "durationSeconds": null,
+      "provenance": "synthetic script; audio pending",
+      "permission": "synthetic-only",
+      "status": "audio-required"
+    },
+    {
+      "id": "background-noise",
+      "scenario": "Malayalam speech with ordinary room noise",
+      "audioPath": "samples-private/background-noise.wav",
+      "referenceText": "ടിവിയുടെ ശബ്ദം കുറയ്ക്കാൻ പറഞ്ഞതിൽ എനിക്ക് ദേഷ്യമില്ല.",
+      "expectedDurationSeconds": 6,
+      "durationSeconds": null,
+      "provenance": "synthetic script with synthetic room noise; audio pending",
+      "permission": "synthetic-only",
+      "status": "audio-required"
+    },
+    {
+      "id": "petty-disagreement",
+      "scenario": "Everyday petty disagreement",
+      "audioPath": "samples-private/petty-disagreement.wav",
+      "referenceText": "ഫ്രിഡ്ജിലെ അവസാനത്തെ കേക്ക് ആരാണ് കഴിച്ചതെന്ന് മാത്രം എനിക്ക് അറിയണം.",
+      "expectedDurationSeconds": 7,
+      "durationSeconds": null,
+      "provenance": "synthetic script; audio pending",
+      "permission": "synthetic-only",
+      "status": "audio-required"
+    }
+  ]
+}

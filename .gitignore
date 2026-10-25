@@ -13,6 +13,7 @@ scripts/provider-spike/output/
 scripts/provider-spike/.venv/
 scripts/provider-spike/.python/
 scripts/provider-spike/.uv-cache/
+scripts/provider-spike/.hf-cache/
 __pycache__/
 *.pyc
 

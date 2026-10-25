@@ -13,6 +13,9 @@ export class WhisperSttProvider implements SttProvider {
       scriptPath?: string;
       language?: string;
       openaiApiKey?: string;
+      elevenlabsApiKey?: string;
+      elevenlabsModelId?: string;
+      elevenlabsLanguageCode?: string;
     } = {}
   ) {}
 
@@ -23,6 +26,13 @@ export class WhisperSttProvider implements SttProvider {
   ): Promise<SttResult> {
     if (signal?.aborted) {
       throw new ZoomOutPublicError("BAD_EVENT", "Transcription aborted by client");
+    }
+
+    const elevenlabsApiKey =
+      this.options.elevenlabsApiKey ?? process.env.ELEVENLABS_API_KEY?.trim();
+
+    if (elevenlabsApiKey && !this.options.scriptPath) {
+      return this.invokeElevenLabsStt(audio, mime, elevenlabsApiKey, signal);
     }
 
     const scriptPath =
@@ -49,6 +59,70 @@ export class WhisperSttProvider implements SttProvider {
       try {
         await fs.unlink(tempFile);
       } catch {}
+    }
+  }
+
+  private async invokeElevenLabsStt(
+    audio: Buffer,
+    mime: string,
+    apiKey: string,
+    signal?: AbortSignal
+  ): Promise<SttResult> {
+    const ext = mime.includes("webm")
+      ? ".webm"
+      : mime.includes("ogg")
+        ? ".ogg"
+        : mime.includes("mp3") || mime.includes("mpeg")
+          ? ".mp3"
+          : ".wav";
+    const modelId =
+      this.options.elevenlabsModelId ?? process.env.ELEVENLABS_STT_MODEL_ID ?? "scribe_v1";
+    const languageCode =
+      this.options.elevenlabsLanguageCode ?? process.env.ELEVENLABS_STT_LANGUAGE_CODE ?? "mal";
+
+    const form = new FormData();
+    form.append("model_id", modelId);
+    form.append("language_code", languageCode);
+    form.append(
+      "file",
+      new Blob([new Uint8Array(audio)], { type: mime || "audio/wav" }),
+      `zoomout-stt-${crypto.randomUUID()}${ext}`
+    );
+
+    try {
+      const response = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+        method: "POST",
+        headers: {
+          "xi-api-key": apiKey,
+        },
+        body: form,
+        signal,
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => "");
+        throw new ZoomOutPublicError(
+          "STT_FAILED",
+          `ElevenLabs STT failed (${response.status}): ${errBody.slice(0, 200)}`
+        );
+      }
+
+      const payload = (await response.json()) as { text?: string };
+      return {
+        text: (payload.text ?? "").trim(),
+        unclear_lines: [],
+      };
+    } catch (err: any) {
+      if (signal?.aborted || err?.name === "AbortError") {
+        throw new ZoomOutPublicError("BAD_EVENT", "Transcription aborted");
+      }
+      if (err instanceof ZoomOutPublicError) {
+        throw err;
+      }
+      throw new ZoomOutPublicError(
+        "STT_FAILED",
+        `ElevenLabs STT request failed: ${err?.message ?? "unknown error"}`
+      );
     }
   }
 

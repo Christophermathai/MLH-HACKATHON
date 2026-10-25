@@ -1,0 +1,19 @@
+{
+  "env": { "ZOOMOUT_PROJECT": "1" },
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git ls-files:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "Bash(npx playwright:*)",
+      "Bash(pytest:*)",
+      "Bash(curl -s http://localhost:*)"
+    ],
+    "additionalDirectories": []
+  },
+  "hooks": {}
+}

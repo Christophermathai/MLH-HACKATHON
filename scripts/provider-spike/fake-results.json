@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "model": "openai/whisper-large-v3",
+  "run": {
+    "mode": "fake",
+    "language": "malayalam",
+    "task": "transcribe",
+    "sampleRateHz": 16000,
+    "chunkLengthSeconds": 30,
+    "batchSize": 1,
+    "device": "fake",
+    "dtype": "fake",
+    "modelRevision": null
+  },
+  "results": [
+    { "id": "ml-only", "text": "ഇന്ന് ചായ ഉണ്ടാക്കാമെന്ന് പറഞ്ഞിട്ട് നീ മറന്നുപോയി.", "elapsedSeconds": 0.1 },
+    { "id": "ml-en-code-switch", "text": "ഞാൻ message അയച്ചപ്പോൾ നീ seen ആക്കി reply ചെയ്തില്ല.", "elapsedSeconds": 0.1 },
+    { "id": "hesitation", "text": "അത് ഞാൻ പറഞ്ഞത് പാത്രം ഇപ്പോൾ കഴുകണം എന്നല്ല പിന്നെ മതി എന്നാണ്.", "elapsedSeconds": 0.1 },
+    { "id": "background-noise", "text": "ടിവിയുടെ ശബ്ദം കുറയ്ക്കാൻ പറഞ്ഞതിൽ എനിക്ക് ദേഷ്യമില്ല.", "elapsedSeconds": 0.1 },
+    { "id": "petty-disagreement", "text": "ഫ്രിഡ്ജിലെ അവസാനത്തെ കേക്ക് ആരാണ് കഴിച്ചതെന്ന് മാത്രം എനിക്ക് അറിയണം.", "elapsedSeconds": 0.1 }
+  ]
+}
