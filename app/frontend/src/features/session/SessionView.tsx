@@ -51,8 +51,20 @@ export function SessionView({
   // Lobby Inputs
   const [joinCodeInput, setJoinCodeInput] = useState("");
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
+
+  // Auto-fill room code from URL query parameter ?room=CODE
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const r = params.get("room");
+      if (r && r.length === 8) {
+        setJoinCodeInput(r.toUpperCase());
+      }
+    }
+  }, []);
 
   // Create room as Side A
   const handleCreateRoom = async () => {
@@ -427,9 +439,23 @@ export function SessionView({
 
       {/* Share room code banner for Side A when Side B hasn't joined */}
       {side === "A" && !isOtherSideReady && !isPostConsent && (
-        <aside className="bg-primary/5 border-b py-2 px-6 text-center text-xs text-primary font-medium">
-          Share this room code with the other person:{" "}
-          <strong className="font-mono text-sm underline tracking-wider">{room}</strong>
+        <aside className="bg-primary/5 border-b py-2.5 px-6 flex items-center justify-center gap-3 text-xs text-primary font-medium">
+          <span>
+            Share this room code with the other person:{" "}
+            <strong className="font-mono text-sm underline tracking-wider">{room}</strong>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              const url = `${window.location.origin}/?room=${room}`;
+              navigator.clipboard.writeText(url);
+              setCopiedLink(true);
+              setTimeout(() => setCopiedLink(false), 2500);
+            }}
+            className="py-1 px-2.5 rounded bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition shadow-sm"
+          >
+            {copiedLink ? "✓ Copied Invite Link!" : "Copy Invite Link"}
+          </button>
         </aside>
       )}
 
