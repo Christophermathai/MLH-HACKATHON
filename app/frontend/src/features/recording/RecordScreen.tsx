@@ -7,7 +7,7 @@ export interface RecordScreenProps {
   roomCode: string;
   side: Side;
   onSendChunk?: (chunk: Uint8Array) => Promise<void> | void;
-  onStart?: () => void;
+  onStart?: (mime?: string) => void;
   onStop?: () => void;
   onSwitchToTyped?: () => void;
 }
@@ -38,6 +38,7 @@ export function RecordScreen({
   onSwitchToTyped,
 }: RecordScreenProps) {
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -81,14 +82,22 @@ export function RecordScreen({
         : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
 
-      recorder.ondataavailable = async (e) => {
+      const pendingChunks: Promise<void>[] = [];
+
+      recorder.ondataavailable = (e) => {
         if (e.data.size > 0 && onSendChunk) {
-          const buffer = await e.data.arrayBuffer();
-          onSendChunk(new Uint8Array(buffer));
+          const promise = e.data.arrayBuffer().then((buffer) => {
+            onSendChunk(new Uint8Array(buffer));
+          });
+          pendingChunks.push(promise);
         }
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
+        setIsTranscribing(true);
+        try {
+          await Promise.all(pendingChunks);
+        } catch {}
         stream.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
         if (timerRef.current) clearInterval(timerRef.current);
@@ -100,7 +109,7 @@ export function RecordScreen({
       recorder.start(500); // 500ms chunks
       setIsRecording(true);
       setSeconds(0);
-      onStart?.();
+      onStart?.(mimeType || "audio/webm");
 
       timerRef.current = setInterval(() => {
         setSeconds((s) => {
@@ -176,18 +185,25 @@ export function RecordScreen({
         <div className="flex flex-col items-center justify-center space-y-4">
           <button
             type="button"
+            disabled={isTranscribing}
             onClick={isRecording ? stopRecording : startRecording}
-            className={`w-24 h-24 rounded-full flex items-center justify-center font-bold text-lg shadow-lg transition-all ${
-              isRecording
+            className={`w-24 h-24 rounded-full flex items-center justify-center font-bold text-sm shadow-lg transition-all ${
+              isTranscribing
+                ? "bg-amber-600 text-white animate-pulse cursor-wait"
+                : isRecording
                 ? "bg-red-600 text-white animate-pulse"
                 : "bg-primary text-primary-foreground hover:scale-105"
             }`}
           >
-            {isRecording ? "Stop" : "Record"}
+            {isTranscribing ? "Transcribing..." : isRecording ? "Stop" : "Record"}
           </button>
 
           <div className="text-sm font-semibold">
-            {isRecording ? (
+            {isTranscribing ? (
+              <span className="text-amber-600 dark:text-amber-400 animate-pulse">
+                Transcribing Malayalam audio...
+              </span>
+            ) : isRecording ? (
               <span className="text-red-600 dark:text-red-400">
                 Recording · {seconds}s / 60s
               </span>

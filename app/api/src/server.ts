@@ -28,9 +28,12 @@ import {
   FakeMediatorProvider,
   FakeJudgeStreamProvider,
   FakeTtsProvider,
+  FakeSttProvider,
 } from "./providers/fakeProviders.js";
 import { OpenAiLlmProvider } from "./providers/openaiLlm.js";
 import { ElevenLabsTtsProvider } from "./providers/elevenlabsTts.js";
+import { WhisperSttProvider } from "./providers/whisperStt.js";
+import { SttProvider } from "./providers/types.js";
 
 export interface RoomData extends OrchestratedRoom {
   room: string;
@@ -85,7 +88,7 @@ function readJsonBody(req: http.IncomingMessage): Promise<any> {
 
 export function createGatewayServer(
   config: ServerConfig,
-  customProviders?: Partial<PipelineProviders>
+  customProviders?: Partial<PipelineProviders> & { stt?: SttProvider }
 ) {
   const wss = new WebSocketServer({ noServer: true });
   const rooms = new Map<string, RoomData>();
@@ -107,6 +110,16 @@ export function createGatewayServer(
     judge: customProviders?.judge ?? llmProvider ?? new FakeJudgeStreamProvider(),
     tts: customProviders?.tts ?? elevenlabsTts ?? new FakeTtsProvider(),
   };
+
+  const sttProvider: SttProvider =
+    customProviders?.stt ??
+    (isLive && (config.elevenlabsApiKey || process.env.ELEVENLABS_API_KEY)
+      ? new WhisperSttProvider({
+          elevenlabsApiKey: config.elevenlabsApiKey || process.env.ELEVENLABS_API_KEY,
+          elevenlabsModelId: process.env.ELEVENLABS_STT_MODEL_ID || "scribe_v1",
+          elevenlabsLanguageCode: process.env.ELEVENLABS_STT_LANGUAGE_CODE || "mal",
+        })
+      : new FakeSttProvider());
 
   function getSnapshot(room: RoomData, side: Side): SessionSnapshot {
     return {
@@ -304,9 +317,29 @@ export function createGatewayServer(
   wss.on("connection", (ws: WebSocket) => {
     let boundRoom: RoomData | null = null;
     let boundSide: Side | null = null;
+    let isRecording = false;
+    let audioChunks: Buffer[] = [];
+    let audioMime = "audio/webm";
 
-    ws.on("message", (data: Buffer | string, isBinary: boolean) => {
+    ws.on("message", async (data: Buffer | string | ArrayBuffer | Buffer[], isBinary: boolean) => {
       if (isBinary) {
+        if (isRecording) {
+          let chunk: Buffer;
+          if (Buffer.isBuffer(data)) {
+            chunk = data;
+          } else if (data instanceof ArrayBuffer) {
+            chunk = Buffer.from(data);
+          } else if (Array.isArray(data)) {
+            chunk = Buffer.concat(data);
+          } else {
+            chunk = Buffer.from(data as any);
+          }
+
+          const currentTotal = audioChunks.reduce((acc, c) => acc + c.length, 0);
+          if (currentTotal + chunk.length <= LIMITS.MAX_AUDIO_TOTAL_BYTES * 2) {
+            audioChunks.push(chunk);
+          }
+        }
         return;
       }
 
@@ -366,6 +399,67 @@ export function createGatewayServer(
             code: "UNAUTHORIZED",
             message: "Must send valid join event first",
           })));
+          return;
+        }
+
+        if (message.type === "start_recording") {
+          if (boundRoom.confirmed[boundSide]) {
+            throw new ZoomOutPublicError("CONFIRMATION_LOCKED", "Transcript is locked for this session. Start a new room to change.");
+          }
+          isRecording = true;
+          audioChunks = [];
+          audioMime = message.payload.mime || "audio/webm";
+          boundRoom.states[boundSide] = "RECORDING";
+          ws.send(JSON.stringify(createServerMessage("recording_started", {
+            mode: message.payload.mode,
+            mime: audioMime,
+          }, message.requestId)));
+          broadcastSnapshots(boundRoom);
+          return;
+        }
+
+        if (message.type === "cancel_recording") {
+          isRecording = false;
+          audioChunks = [];
+          boundRoom.states[boundSide] = "IDLE";
+          broadcastSnapshots(boundRoom);
+          return;
+        }
+
+        if (message.type === "stop_recording") {
+          isRecording = false;
+          boundRoom.states[boundSide] = "TRANSCRIBING";
+          broadcastSnapshots(boundRoom);
+
+          const completeAudio = Buffer.concat(audioChunks);
+          audioChunks = []; // Immediate zero-retention privacy guarantee
+
+          try {
+            if (completeAudio.length === 0) {
+              throw new Error("No audio bytes received");
+            }
+            console.log(`[ZoomOut Gateway] Transcribing ${completeAudio.length} bytes (${audioMime}) for Side ${boundSide}...`);
+            const result = await sttProvider.batch(completeAudio, audioMime);
+            console.log(`[ZoomOut Gateway] Transcription success for Side ${boundSide}: "${result.text}"`);
+
+            boundRoom.states[boundSide] = "REVIEW";
+            boundRoom.transcripts[boundSide] = result.text;
+            ws.send(JSON.stringify(createServerMessage("final_transcript", {
+              text: result.text,
+              unclear_lines: result.unclear_lines,
+            }, message.requestId)));
+          } catch (err: any) {
+            console.error(`[ZoomOut Gateway] STT transcription failed for Side ${boundSide}:`, err?.message || err);
+            boundRoom.states[boundSide] = "REVIEW";
+            boundRoom.transcripts[boundSide] = "";
+            ws.send(JSON.stringify(createServerMessage("final_transcript", {
+              text: "",
+              unclear_lines: [
+                "Speech transcription could not process the audio. You can review or type your testimony directly below."
+              ],
+            }, message.requestId)));
+          }
+          broadcastSnapshots(boundRoom);
           return;
         }
 
@@ -444,6 +538,8 @@ export function createGatewayServer(
     });
 
     ws.on("close", () => {
+      isRecording = false;
+      audioChunks = [];
       if (boundRoom && boundSide && boundRoom.sockets[boundSide] === ws) {
         boundRoom.sockets[boundSide] = null;
         broadcastSnapshots(boundRoom);
@@ -463,6 +559,9 @@ export function createGatewayServer(
       }),
     close: () =>
       new Promise<void>((resolve, reject) => {
+        if (typeof (server as any).closeIdleConnections === "function") {
+          (server as any).closeIdleConnections();
+        }
         wss.close(() => {
           server.close((err) => (err ? reject(err) : resolve()));
         });

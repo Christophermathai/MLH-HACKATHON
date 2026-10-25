@@ -317,13 +317,13 @@ export function SessionView({
     }
   };
 
-  const handleStartRecording = () => {
+  const handleStartRecording = (mime = "audio/webm") => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(
         JSON.stringify({
           v: 1,
           type: "start_recording",
-          payload: { mode: "pcm", mime: "audio/wav" },
+          payload: { mode: "batch", mime },
         })
       );
     }

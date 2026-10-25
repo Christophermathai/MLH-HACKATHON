@@ -72,9 +72,11 @@ export class WhisperSttProvider implements SttProvider {
       ? ".webm"
       : mime.includes("ogg")
         ? ".ogg"
-        : mime.includes("mp3") || mime.includes("mpeg")
-          ? ".mp3"
-          : ".wav";
+        : mime.includes("mp4")
+          ? ".mp4"
+          : mime.includes("mp3") || mime.includes("mpeg")
+            ? ".mp3"
+            : ".wav";
     const modelId =
       this.options.elevenlabsModelId ?? process.env.ELEVENLABS_STT_MODEL_ID ?? "scribe_v1";
     const languageCode =
@@ -108,8 +110,9 @@ export class WhisperSttProvider implements SttProvider {
       }
 
       const payload = (await response.json()) as { text?: string };
+      const rawText = (payload.text ?? "").trim();
       return {
-        text: (payload.text ?? "").trim(),
+        text: devanagariToMalayalam(rawText),
         unclear_lines: [],
       };
     } catch (err: any) {
