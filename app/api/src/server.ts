@@ -1,41 +1,27 @@
 import http from "node:http";
-import crypto from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import {
-  LIMITS,
   Side,
-  ParticipantState,
-  SessionState,
+  LIMITS,
   parseClientMessage,
   createServerMessage,
   sanitizeError,
-  SessionSnapshot,
   ClaimParticipantRequestSchema,
   ZoomOutPublicError,
 } from "@zoomout/contracts";
 import { ServerConfig, isOriginAllowed } from "./config.js";
-
-interface RoomData {
-  room: string;
-  tokens: { A: string; B: string | null };
-  createdAt: number;
-  expiresAt: string;
-  states: { A: ParticipantState; B: ParticipantState };
-  transcripts: { A: string | null; B: string | null };
-  confirmed: { A: boolean; B: boolean };
-  consent: { A: boolean; B: boolean };
-  sessionState: SessionState;
-  generationId: string | null;
-  sockets: { A: WebSocket | null; B: WebSocket | null };
-}
-
-function generateRoomCode(): string {
-  return crypto.randomBytes(4).toString("hex").toUpperCase();
-}
-
-function generateToken(): string {
-  return crypto.randomBytes(32).toString("hex");
-}
+import { SessionStore } from "./sessions/sessionStore.js";
+import { SessionLifecycleManager } from "./sessions/lifecycle.js";
+import { SessionRecoveryManager } from "./sessions/recovery.js";
+import { PipelineOrchestrator } from "./sessions/orchestrator.js";
+import {
+  FakeAnalystProvider,
+  FakeMediatorProvider,
+  FakeJudgeStreamProvider,
+  FakeTtsProvider,
+} from "./providers/fakeProviders.js";
+import { sendToSide, broadcast } from "./transport/projections.js";
+import { transitionParticipant } from "./sessions/stateMachine.js";
 
 function readJsonBody(req: http.IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -62,29 +48,22 @@ function readJsonBody(req: http.IncomingMessage): Promise<any> {
 
 export function createGatewayServer(config: ServerConfig) {
   const wss = new WebSocketServer({ noServer: true });
-  const rooms = new Map<string, RoomData>();
+  const store = new SessionStore();
+  const lifecycle = new SessionLifecycleManager(store);
+  const recovery = new SessionRecoveryManager();
 
-  function getSnapshot(room: RoomData, side: Side): SessionSnapshot {
-    return {
-      room: room.room,
-      side,
-      expiresAt: room.expiresAt,
-      ownState: room.states[side],
-      ownText: room.transcripts[side],
-      ownConfirmed: room.confirmed[side],
-      ownConsent: room.consent[side],
-      readiness: {
-        A: room.confirmed.A && room.consent.A,
-        B: room.confirmed.B && room.consent.B,
-      },
-      sessionState: room.sessionState,
-      generationId: room.generationId,
-      sharedResult: null,
-      verdictText: null,
-      outcome: null,
-      audioManifest: null,
-    };
-  }
+  // Mock / Live providers
+  const analystProvider = new FakeAnalystProvider();
+  const mediatorProvider = new FakeMediatorProvider();
+  const judgeProvider = new FakeJudgeStreamProvider();
+  const ttsProvider = new FakeTtsProvider();
+
+  const orchestrator = new PipelineOrchestrator(
+    analystProvider,
+    mediatorProvider,
+    judgeProvider,
+    ttsProvider
+  );
 
   const server = http.createServer(async (req, res) => {
     const origin = req.headers.origin;
@@ -124,56 +103,26 @@ export function createGatewayServer(config: ServerConfig) {
 
     // POST /api/rooms
     if (req.method === "POST" && url.pathname === "/api/rooms") {
-      if (rooms.size >= LIMITS.MAX_ACTIVE_ROOMS) {
-        res.writeHead(503, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ code: "CAPACITY", message: "Server room capacity reached" }));
+      try {
+        const roomA = store.createRoom();
+        const session = store.getSession(roomA.room)!;
+        lifecycle.scheduleExpiry(session);
+
+        res.writeHead(201, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(roomA));
+        return;
+      } catch (err: any) {
+        const sanitized = sanitizeError(err);
+        res.writeHead(sanitized.code === "CAPACITY" ? 503 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(sanitized));
         return;
       }
-
-      const roomCode = generateRoomCode();
-      const tokenA = generateToken();
-      const now = Date.now();
-      const expiresAt = new Date(now + LIMITS.SESSION_LIFETIME_MS).toISOString();
-
-      const newRoom: RoomData = {
-        room: roomCode,
-        tokens: { A: tokenA, B: null },
-        createdAt: now,
-        expiresAt,
-        states: { A: "IDLE", B: "IDLE" },
-        transcripts: { A: null, B: null },
-        confirmed: { A: false, B: false },
-        consent: { A: false, B: false },
-        sessionState: "CREATED",
-        generationId: null,
-        sockets: { A: null, B: null },
-      };
-
-      rooms.set(roomCode, newRoom);
-
-      res.writeHead(201, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({
-          room: roomCode,
-          side: "A",
-          resumeToken: tokenA,
-          expiresAt,
-        })
-      );
-      return;
     }
 
     // POST /api/rooms/:room/participants
     const participantMatch = url.pathname.match(/^\/api\/rooms\/([a-zA-Z0-9]{8})\/participants$/);
     if (req.method === "POST" && participantMatch) {
       const roomCode = participantMatch[1].toUpperCase();
-      const room = rooms.get(roomCode);
-
-      if (!room || Date.now() > room.createdAt + LIMITS.SESSION_LIFETIME_MS) {
-        res.writeHead(404, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ code: "SESSION_UNAVAILABLE", message: "Room not found or expired" }));
-        return;
-      }
 
       try {
         const body = await readJsonBody(req);
@@ -184,28 +133,17 @@ export function createGatewayServer(config: ServerConfig) {
           return;
         }
 
-        if (room.tokens.B !== null) {
-          res.writeHead(409, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ code: "SIDE_TAKEN", message: "Side B has already been claimed for this room." }));
-          return;
-        }
-
-        const tokenB = generateToken();
-        room.tokens.B = tokenB;
-
+        const roomB = store.claimSideB(roomCode);
         res.writeHead(201, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            room: roomCode,
-            side: "B",
-            resumeToken: tokenB,
-            expiresAt: room.expiresAt,
-          })
-        );
+        res.end(JSON.stringify(roomB));
         return;
       } catch (err: any) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(sanitizeError(err)));
+        const sanitized = sanitizeError(err);
+        let status = 400;
+        if (sanitized.code === "SESSION_UNAVAILABLE") status = 404;
+        if (sanitized.code === "SIDE_TAKEN") status = 409;
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(sanitized));
         return;
       }
     }
@@ -235,10 +173,10 @@ export function createGatewayServer(config: ServerConfig) {
   });
 
   wss.on("connection", (ws: WebSocket) => {
-    let boundRoom: RoomData | null = null;
+    let boundRoomCode: string | null = null;
     let boundSide: Side | null = null;
 
-    ws.on("message", (data: Buffer | string, isBinary: boolean) => {
+    ws.on("message", async (data: Buffer | string, isBinary: boolean) => {
       if (isBinary) {
         return;
       }
@@ -258,44 +196,16 @@ export function createGatewayServer(config: ServerConfig) {
         if (message.type === "join") {
           const side = message.payload.side as Side;
           const { room: roomCode, resumeToken } = message.payload;
-          const room = rooms.get(roomCode.toUpperCase());
 
-          if (!room || Date.now() > room.createdAt + LIMITS.SESSION_LIFETIME_MS) {
-            ws.send(JSON.stringify(createServerMessage("error", {
-              code: "SESSION_UNAVAILABLE",
-              message: "Room not found or expired",
-            })));
-            ws.close();
-            return;
-          }
-
-          if (room.tokens[side] !== resumeToken) {
-            ws.send(JSON.stringify(createServerMessage("error", {
-              code: "UNAUTHORIZED",
-              message: "Invalid resume token for this participant",
-            })));
-            ws.close();
-            return;
-          }
-
-          // Replace old socket on reconnect
-          if (room.sockets[side] && room.sockets[side] !== ws) {
-            try {
-              room.sockets[side]?.close();
-            } catch {}
-          }
-
-          boundRoom = room;
+          const session = store.validateToken(roomCode, side, resumeToken);
+          boundRoomCode = session.room;
           boundSide = side;
-          room.sockets[side] = ws;
 
-          // Send session snapshot
-          const snapshot = getSnapshot(room, side);
-          ws.send(JSON.stringify(createServerMessage("session_snapshot", snapshot, message.requestId)));
+          recovery.handleReconnect(session, side, ws, message.requestId);
           return;
         }
 
-        if (!boundRoom || !boundSide) {
+        if (!boundRoomCode || !boundSide) {
           ws.send(JSON.stringify(createServerMessage("error", {
             code: "UNAUTHORIZED",
             message: "Must send valid join event first",
@@ -303,30 +213,42 @@ export function createGatewayServer(config: ServerConfig) {
           return;
         }
 
+        const session = store.getSession(boundRoomCode);
+        if (!session) {
+          ws.send(JSON.stringify(createServerMessage("error", {
+            code: "SESSION_UNAVAILABLE",
+            message: "Room not found or expired",
+          })));
+          ws.close();
+          return;
+        }
+
         if (message.type === "confirm_transcript") {
           const { text, consent } = message.payload;
-          boundRoom.transcripts[boundSide] = text;
-          boundRoom.confirmed[boundSide] = true;
-          boundRoom.consent[boundSide] = consent;
-          boundRoom.states[boundSide] = "READY";
+          const { isFirstConfirmation } = store.confirmParticipant(session, boundSide, text, consent);
 
-          const sideReadyMsg = JSON.stringify(createServerMessage("side_ready", { side: boundSide }));
-          boundRoom.sockets.A?.send(sideReadyMsg);
-          boundRoom.sockets.B?.send(sideReadyMsg);
+          if (isFirstConfirmation) {
+            broadcast(session, "side_ready", { side: boundSide });
 
-          if (boundRoom.confirmed.A && boundRoom.confirmed.B) {
-            boundRoom.sessionState = "BOTH_READY";
-            const bothReadyMsg = JSON.stringify(createServerMessage("both_ready", {}));
-            boundRoom.sockets.A?.send(bothReadyMsg);
-            boundRoom.sockets.B?.send(bothReadyMsg);
+            if (session.confirmedRevision.A === 1 && session.confirmedRevision.B === 1) {
+              broadcast(session, "both_ready", {});
+            }
+
+            // Trigger orchestrator pipeline asynchronously
+            orchestrator.onSideConfirmed(session, boundSide).catch(() => {});
           }
           return;
         }
 
         if (message.type === "start_typed_input") {
-          boundRoom.states[boundSide] = "REVIEW";
-          boundRoom.transcripts[boundSide] = "";
-          ws.send(JSON.stringify(createServerMessage("final_transcript", { text: "" }, message.requestId)));
+          transitionParticipant(session, boundSide, "REVIEW");
+          session.transcripts[boundSide] = "";
+          sendToSide(session, boundSide, "final_transcript", { text: "" }, message.requestId);
+          return;
+        }
+
+        if (message.type === "replay_audio") {
+          recovery.replayCachedOutput(session, boundSide, ws);
           return;
         }
       } catch (err: any) {
@@ -335,8 +257,11 @@ export function createGatewayServer(config: ServerConfig) {
     });
 
     ws.on("close", () => {
-      if (boundRoom && boundSide && boundRoom.sockets[boundSide] === ws) {
-        boundRoom.sockets[boundSide] = null;
+      if (boundRoomCode && boundSide) {
+        const session = store.getSession(boundRoomCode);
+        if (session) {
+          lifecycle.handleDisconnect(session, boundSide);
+        }
       }
     });
   });
@@ -344,7 +269,10 @@ export function createGatewayServer(config: ServerConfig) {
   return {
     server,
     wss,
-    rooms,
+    store,
+    lifecycle,
+    recovery,
+    orchestrator,
     start: () =>
       new Promise<void>((resolve) => {
         server.listen(config.port, config.host, () => {
@@ -353,6 +281,7 @@ export function createGatewayServer(config: ServerConfig) {
       }),
     close: () =>
       new Promise<void>((resolve, reject) => {
+        lifecycle.disposeAll();
         wss.close(() => {
           server.close((err) => (err ? reject(err) : resolve()));
         });

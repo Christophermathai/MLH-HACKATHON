@@ -27,7 +27,7 @@ The in-memory design cannot recover after process restart. Exactly-once orchestr
 - Verification checks:
   - `npm run test --workspace=@zoomout/api`: 14/14 tests passing.
 - Deviations: None.
-- Remaining work: P3 (Recover and clean up).
+- Remaining work: None; P1, P2, P3 complete.
 
 ### 2026-10-25: Phase 2 (Gate and route generation)
 - Files created/modified:
@@ -41,7 +41,23 @@ The in-memory design cannot recover after process restart. Exactly-once orchestr
 - Verification checks:
   - `npm run test --workspace=@zoomout/api`: 16/16 tests passing.
 - Deviations: None.
-- Remaining work: P3 (Recover and clean up).
+- Remaining work: None.
+
+### 2026-10-25: Phase 3 (Recover and clean up)
+- Files created/modified:
+  - `app/api/src/sessions/lifecycle.ts`: `SessionLifecycleManager` managing 30-minute absolute session expiry timers, graceful disposal of pending jobs and open sockets, and disconnect cleanup (resetting incomplete recordings to `IDLE` per EC-003-03).
+  - `app/api/src/sessions/recovery.ts`: `SessionRecoveryManager` handling socket replacement on reconnect, delivery of authoritative snapshots, cached audio replay without re-running models, and client `replay_audio` requests.
+  - `app/api/src/sessions/recovery.test.ts`: Unit tests validating AC-003-06, AC-003-07, AC-003-08, and EC-003-03.
+  - `app/api/src/server.ts`: Integrated `SessionStore`, `SessionLifecycleManager`, `SessionRecoveryManager`, and `PipelineOrchestrator` into the HTTP/WebSocket gateway server.
+- Requirements and Acceptance criteria:
+  - FR-003-06 / AC-003-06: Reconnect using room, side, and matching token recovers authoritative state and cached output without re-running models. Using another participant's token fails authentication.
+  - FR-003-07 / AC-003-07: Incomplete recordings are discarded on disconnect. Absolute 30-minute expiry cancels pending jobs, cleans up caches, and closes sockets; subsequent requests return `SESSION_UNAVAILABLE`.
+  - FR-003-08 / AC-003-08: Failed generation preserves state without restarting models on reconnect.
+- Verification checks:
+  - `npm run test --workspace=@zoomout/api`: 19/19 tests passing.
+  - `npm run test:e2e --workspace=@zoomout/api`: Smoke exchange passed.
+- Deviations: None.
+- Remaining work: Feature 003 implementation complete. Ready for Feature 004 (Recording and transcription).
 
 ## Resume pointer
 
