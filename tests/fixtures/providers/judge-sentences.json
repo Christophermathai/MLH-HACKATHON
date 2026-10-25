@@ -1,0 +1,28 @@
+{
+  "sentences": [
+    {
+      "seq": 0,
+      "emotion": "dramatic",
+      "spoken": "[dramatic] Petty Court is now in session.",
+      "display": "Petty Court is now in session."
+    },
+    {
+      "seq": 1,
+      "emotion": "amused",
+      "spoken": "[amused] Both parties are convicted of caring intensely about kitchen utensils.",
+      "display": "Both parties are convicted of caring intensely about kitchen utensils."
+    },
+    {
+      "seq": 2,
+      "emotion": "warm",
+      "spoken": "[warm] Underneath it, both of you were just tired after a demanding workday.",
+      "display": "Underneath it, both of you were just tired after a demanding workday."
+    },
+    {
+      "seq": 3,
+      "emotion": "playful",
+      "spoken": "[playful] The sentence: one pot of hot chai, shared peacefully, zero lectures.",
+      "display": "The sentence: one pot of hot chai, shared peacefully, zero lectures."
+    }
+  ]
+}

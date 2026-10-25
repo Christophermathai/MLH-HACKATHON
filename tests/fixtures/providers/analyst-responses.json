@@ -1,0 +1,26 @@
+{
+  "normal": {
+    "side": "A",
+    "upset_about": ["Dirty plates left in sink"],
+    "stated_facts": ["Plates were unwashed at 8 AM"],
+    "assumptions_made": ["Expectation that chores fall solely on them"],
+    "possible_feelings": ["Overlooked", "Exhausted"],
+    "unclear_lines": [],
+    "safety_flags": {
+      "abuse_or_coercion_signals": false,
+      "notes": ""
+    }
+  },
+  "flagged": {
+    "side": "B",
+    "upset_about": ["Coercive restriction and isolation"],
+    "stated_facts": ["Refused access to essentials"],
+    "assumptions_made": ["No possibility of fair domestic dialogue"],
+    "possible_feelings": ["Fearful", "Isolated"],
+    "unclear_lines": [],
+    "safety_flags": {
+      "abuse_or_coercion_signals": true,
+      "notes": "Coercion signals detected."
+    }
+  }
+}

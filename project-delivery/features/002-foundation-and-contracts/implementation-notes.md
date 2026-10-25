@@ -53,7 +53,28 @@ This plan adds explicit protocol details absent from the architecture. Keep the 
   - `npm run test --workspace=@zoomout/contracts`: 12/12 passing tests.
   - All fixtures validated against schemas.
 - Deviations: None.
-- Remaining work: P3 (Provide fakes and documentation).
+- Remaining work: None; P1, P2, P3 complete.
+
+### 2026-10-25: Phase 3 (Provide fakes and documentation)
+- Files created/modified:
+  - `app/api/src/providers/types.ts`: Stable, cancellable provider interfaces (`SttProvider`, `AnalystProvider`, `MediatorProvider`, `JudgeStreamProvider`, `TtsProvider`) using `AbortSignal` and standard contract types without vendor SDK coupling.
+  - `app/api/src/providers/fakeProviders.ts`: Deterministic fake implementations supporting partial transcripts, cancellation, safety triggers, reordered sentence completion, and gap failures.
+  - `app/api/src/providers/fakeProviders.test.ts`: Unit tests validating AC-002-05 (STT partials & abort, analyst normal & abuse, mediator score & apology invariance, judge streaming & mid-stream abort, TTS out-of-order resolution & gap failure).
+  - `tests/fixtures/providers/`: Provider fixtures for STT transcripts, TTS audio clip, analyst responses, mediator responses, and judge sentences.
+  - `app/api/src/server.ts`: Implemented bootstrap endpoints (`POST /api/rooms`, `POST /api/rooms/:room/participants`), session capacity limit, and authenticated WebSocket session snapshot / typed input exchange.
+  - `app/api/src/smoke.test.ts`: End-to-end browser-to-gateway smoke test verifying room creation, Side B first claim, Side B repeated claim (409 conflict), WebSocket join, snapshot reception, typed input transition, transcript confirmation (`side_ready`), and unauthorized token rejection.
+  - `docs/local-development.md`: Comprehensive local developer guide detailing the 3-screen flow, service ports (3000, 8787), mock vs live modes, verification commands, and links to downstream feature specs.
+- Requirements and Acceptance criteria:
+  - FR-002-05 / AC-002-05: Fake adapters exercise partial transcripts, model failures, reordered TTS completion, and cancellation with zero SDK dependencies.
+  - FR-002-08 / AC-002-08: Setup guide published explaining ports, run instructions, mock mode startup, contracts directory, and pending features.
+  - EC-002-03: Batch and typed inputs confirmed as operational paths alongside streaming declarations.
+- Verification checks:
+  - `npm run build`: Monorepo build clean across all packages.
+  - `npm run typecheck`: Monorepo typecheck clean.
+  - `npm run test`: 23 passing tests (12 in `@zoomout/contracts`, 11 in `@zoomout/api`).
+  - `npm run test:e2e`: Smoke test passed in 164ms.
+- Deviations: None.
+- Remaining work: Feature 002 implementation is complete. Ready for Feature 003 (Session gateway and recovery).
 
 ## Resume pointer
 

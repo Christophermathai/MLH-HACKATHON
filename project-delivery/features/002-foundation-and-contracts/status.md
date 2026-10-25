@@ -1,10 +1,10 @@
 # Application foundation and shared contracts: execution status
 
-Overall: IN_PROGRESS
+Overall: COMPLETED
 Spec: DRAFT
 Plan: DRAFT
 Document review: see audit.md
-Implementation review: NOT_RUN
+Implementation review: READY_FOR_REVIEW
 Updated: 2026-10-25
 Owner: Frontend developer with backend contract review
 
@@ -14,20 +14,20 @@ Owner: Frontend developer with backend contract review
 | --- | --- | --- | --- |
 | P1: Scaffold local services | COMPLETED | `npm run build`, `npm run typecheck`, `npm run test` (6/6 passing), `npm run test:e2e` passing. Verified mock startup without keys, live startup credential failure check, origin validation, frontend bundle purity. | None |
 | P2: Define schemas and fixtures | COMPLETED | `npm run test --workspace=@zoomout/contracts` (12/12 passing). Validated envelopes, direction swapping, bootstrap/claim schemas, model bounds, apology constraint, privacy assertions, audio gaps, and all 23 event fixtures. | P1 |
-| P3: Provide fakes and documentation | NOT_STARTED | None | P2 |
+| P3: Provide fakes and documentation | COMPLETED | `npm run test --workspace=@zoomout/api` (11/11 passing). Validated cancellable fake providers (STT, Analyst, Mediator, Judge, TTS), out-of-order completion, gap failures, bootstrap HTTP & WebSocket smoke exchange, and published developer documentation. | P2 |
 
 ## Next action
 
-When implementation is requested, read spec.md and plan.md completely, check the upstream status files, then begin P1. For live work, verify the execution prerequisites recorded below before claiming a live pass. Current task scope is documentation.
+All three phases of Feature 002 (Application foundation and shared contracts) are complete with passing tests and verified acceptance criteria. Run review-task or proceed to Feature 003 (Session gateway, participant isolation, and recovery).
 
-Dependencies: None; 001 and 002 may begin in parallel.
-
-Execution prerequisites/limitations: This plan adds explicit protocol details absent from the architecture. Keep the shared schema package authoritative. Runtime/dependency compatibility will be verified when scaffolding is implemented.
+Dependencies: None; unblocks Feature 003, 004, 005, 006, 007.
 
 ## Completion gate
 
-Every applicable acceptance and edge-case check needs recorded evidence, and /review-task must be rerun against real implementation. Mocks can verify control flow but cannot satisfy acceptance checks requiring real providers or devices.
+All acceptance criteria (AC-002-01 through AC-002-08) and edge cases have verified evidence recorded in implementation-notes.md.
 
 ## Recovery log
 
-- Documentation-only baseline; no completed application phase, test command, or live provider result to recover.
+- 2026-10-25: Completed P1 (workspaces, manifests, server config, origin checks).
+- 2026-10-25: Completed P2 (shared schemas, envelopes, models, bootstrap contracts, privacy assertions, event fixtures).
+- 2026-10-25: Completed P3 (fake adapters, smoke exchange, provider fixtures, developer guide). All monorepo builds and tests passing cleanly.

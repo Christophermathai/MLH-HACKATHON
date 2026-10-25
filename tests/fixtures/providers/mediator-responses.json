@@ -1,0 +1,19 @@
+{
+  "what_each_is_upset_about": {
+    "A": ["Dirty plates left in sink"],
+    "B": ["Immediate instructions after arriving home"]
+  },
+  "where_interpretations_differ": [
+    "Whether chore timing reflects consideration or casual delay"
+  ],
+  "petty_score": 4,
+  "zoom_out": {
+    "immediate_issue": "Dirty plates in the sink",
+    "possible_underlying_feelings": ["Fatigue and need for domestic cooperation"],
+    "bigger_picture": "Both parties want acknowledgment of their personal fatigue"
+  },
+  "truce": {
+    "next_step": "Person B rinses plates, Person A brews tea, silent companionship for 30 minutes",
+    "requires_apology": false
+  }
+}

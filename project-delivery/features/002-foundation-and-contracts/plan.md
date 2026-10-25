@@ -82,14 +82,14 @@ Exit: record commands or manual evidence and outcomes in implementation-notes.md
 
 | Requirement | Acceptance | Phase | Current evidence |
 | --- | --- | --- | --- |
-| FR-002-01 | AC-002-01 | P1 | Not implemented / not run |
-| FR-002-02 | AC-002-02 | P2 | Not implemented / not run |
-| FR-002-03 | AC-002-03 | P2 | Not implemented / not run |
-| FR-002-04 | AC-002-04 | P2 | Not implemented / not run |
-| FR-002-05 | AC-002-05 | P3 | Not implemented / not run |
-| FR-002-06 | AC-002-06 | P2 | Not implemented / not run |
-| FR-002-07 | AC-002-07 | P1 | Not implemented / not run |
-| FR-002-08 | AC-002-08 | P3 | Not implemented / not run |
+| FR-002-01 | AC-002-01 | P1 | Passed: npm workspaces scaffolded, mock startup works without keys, live credential validation verified via tests |
+| FR-002-02 | AC-002-02 | P2 | Passed: Versioned envelope and direction enforcement tested in `contracts.test.ts` and `fixtures.test.ts` |
+| FR-002-03 | AC-002-03 | P2 | Passed: Bootstrap room create, B claim, 409 conflict, and snapshot schemas verified |
+| FR-002-04 | AC-002-04 | P2 | Passed: Analyst/Mediator bounds, petty_score 0-10, requires_apology: false, and snapshot privacy verified |
+| FR-002-05 | AC-002-05 | P3 | Passed: Cancellable fake providers for STT, Analyst, Mediator, Judge, and TTS tested in `fakeProviders.test.ts` |
+| FR-002-06 | AC-002-06 | P2 | Passed: Audio manifests (success, gap, all-failed) and outcome contracts verified |
+| FR-002-07 | AC-002-07 | P1 | Passed: `build`, `typecheck`, `test`, `test:e2e` scripts implemented; browser origin validation enforced |
+| FR-002-08 | AC-002-08 | P3 | Passed: Published `docs/local-development.md` and `docs/event-contract.md` with full flow, ports, and schema docs |
 
 ## Verification execution
 
