@@ -4,7 +4,7 @@ import { SessionData } from "./sessionTypes.js";
 const VALID_TRANSITIONS: Record<ParticipantState, ParticipantState[]> = {
   IDLE: ["RECORDING", "REVIEW"],
   RECORDING: ["TRANSCRIBING", "IDLE", "REVIEW"],
-  TRANSCRIBING: ["REVIEW"],
+  TRANSCRIBING: ["REVIEW", "IDLE"],
   REVIEW: ["RECORDING", "READY"],
   READY: [], // Terminal for side once confirmed
 };

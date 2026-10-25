@@ -14,12 +14,16 @@ import { SessionStore } from "./sessions/sessionStore.js";
 import { SessionLifecycleManager } from "./sessions/lifecycle.js";
 import { SessionRecoveryManager } from "./sessions/recovery.js";
 import { PipelineOrchestrator } from "./sessions/orchestrator.js";
+import { AudioReceiver } from "./audio/audioReceiver.js";
 import {
+  FakeSttProvider,
   FakeAnalystProvider,
   FakeMediatorProvider,
   FakeJudgeStreamProvider,
   FakeTtsProvider,
 } from "./providers/fakeProviders.js";
+import { WhisperSttProvider } from "./providers/whisperStt.js";
+import { SttProvider } from "./providers/types.js";
 import { sendToSide, broadcast } from "./transport/projections.js";
 import { transitionParticipant } from "./sessions/stateMachine.js";
 
@@ -49,21 +53,27 @@ function readJsonBody(req: http.IncomingMessage): Promise<any> {
 export function createGatewayServer(config: ServerConfig) {
   const wss = new WebSocketServer({ noServer: true });
   const store = new SessionStore();
-  const lifecycle = new SessionLifecycleManager(store);
-  const recovery = new SessionRecoveryManager();
-
   // Mock / Live providers
+  const sttProvider: SttProvider =
+    config.providerMode === "live"
+      ? new WhisperSttProvider({ openaiApiKey: config.openaiApiKey })
+      : new FakeSttProvider();
   const analystProvider = new FakeAnalystProvider();
   const mediatorProvider = new FakeMediatorProvider();
   const judgeProvider = new FakeJudgeStreamProvider();
   const ttsProvider = new FakeTtsProvider();
 
+  const audioReceiver = new AudioReceiver(sttProvider);
   const orchestrator = new PipelineOrchestrator(
     analystProvider,
     mediatorProvider,
     judgeProvider,
     ttsProvider
   );
+  const lifecycle = new SessionLifecycleManager(store, (room) => {
+    audioReceiver.cleanupRoom(room);
+  });
+  const recovery = new SessionRecoveryManager();
 
   const server = http.createServer(async (req, res) => {
     const origin = req.headers.origin;
@@ -178,6 +188,15 @@ export function createGatewayServer(config: ServerConfig) {
 
     ws.on("message", async (data: Buffer | string, isBinary: boolean) => {
       if (isBinary) {
+        if (!boundRoomCode || !boundSide) {
+          return;
+        }
+        const session = store.getSession(boundRoomCode);
+        if (!session) {
+          return;
+        }
+        const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data as any);
+        await audioReceiver.handleAudioChunk(session, boundSide, chunk);
         return;
       }
 
@@ -223,6 +242,21 @@ export function createGatewayServer(config: ServerConfig) {
           return;
         }
 
+        if (message.type === "start_recording") {
+          audioReceiver.startRecording(session, boundSide, message.payload, message.requestId);
+          return;
+        }
+
+        if (message.type === "stop_recording") {
+          await audioReceiver.stopRecording(session, boundSide, message.requestId);
+          return;
+        }
+
+        if (message.type === "cancel_recording") {
+          audioReceiver.cancelRecording(session, boundSide, message.requestId);
+          return;
+        }
+
         if (message.type === "confirm_transcript") {
           const { text, consent } = message.payload;
           const { isFirstConfirmation } = store.confirmParticipant(session, boundSide, text, consent);
@@ -241,6 +275,7 @@ export function createGatewayServer(config: ServerConfig) {
         }
 
         if (message.type === "start_typed_input") {
+          audioReceiver.cancelRecording(session, boundSide);
           transitionParticipant(session, boundSide, "REVIEW");
           session.transcripts[boundSide] = "";
           sendToSide(session, boundSide, "final_transcript", { text: "" }, message.requestId);
@@ -258,6 +293,7 @@ export function createGatewayServer(config: ServerConfig) {
 
     ws.on("close", () => {
       if (boundRoomCode && boundSide) {
+        audioReceiver.cleanupRecording(boundRoomCode, boundSide);
         const session = store.getSession(boundRoomCode);
         if (session) {
           lifecycle.handleDisconnect(session, boundSide);
@@ -273,6 +309,8 @@ export function createGatewayServer(config: ServerConfig) {
     lifecycle,
     recovery,
     orchestrator,
+    audioReceiver,
+    sttProvider,
     start: () =>
       new Promise<void>((resolve) => {
         server.listen(config.port, config.host, () => {
