@@ -12,10 +12,27 @@ import {
   SessionSnapshot,
   ClaimParticipantRequestSchema,
   ZoomOutPublicError,
+  MediatorResult,
+  SafetyResult,
+  AudioManifest,
+  Outcome,
 } from "@zoomout/contracts";
 import { ServerConfig, isOriginAllowed } from "./config.js";
+import {
+  PipelineProviders,
+  OrchestratedRoom,
+  runOrchestrationPipeline,
+} from "./sessions/orchestrator.js";
+import {
+  FakeAnalystProvider,
+  FakeMediatorProvider,
+  FakeJudgeStreamProvider,
+  FakeTtsProvider,
+} from "./providers/fakeProviders.js";
+import { OpenAiLlmProvider } from "./providers/openaiLlm.js";
+import { ElevenLabsTtsProvider } from "./providers/elevenlabsTts.js";
 
-interface RoomData {
+export interface RoomData extends OrchestratedRoom {
   room: string;
   tokens: { A: string; B: string | null };
   createdAt: number;
@@ -26,6 +43,12 @@ interface RoomData {
   consent: { A: boolean; B: boolean };
   sessionState: SessionState;
   generationId: string | null;
+  sharedResult: MediatorResult | null;
+  verdictText: string | null;
+  safetyResult: SafetyResult | null;
+  outcome: Outcome | null;
+  audioManifest: AudioManifest | null;
+  audioChunks: Map<number, { seq: number; mime: string; data: string }>;
   sockets: { A: WebSocket | null; B: WebSocket | null };
 }
 
@@ -60,9 +83,24 @@ function readJsonBody(req: http.IncomingMessage): Promise<any> {
   });
 }
 
-export function createGatewayServer(config: ServerConfig) {
+export function createGatewayServer(
+  config: ServerConfig,
+  customProviders?: Partial<PipelineProviders>
+) {
   const wss = new WebSocketServer({ noServer: true });
   const rooms = new Map<string, RoomData>();
+
+  // Initialize pipeline providers based on mode or overrides
+  const isLive = config.providerMode === "live";
+  const openaiProvider = isLive && config.openaiApiKey ? new OpenAiLlmProvider({ apiKey: config.openaiApiKey }) : null;
+  const elevenlabsTts = isLive && config.elevenlabsApiKey ? new ElevenLabsTtsProvider({ apiKey: config.elevenlabsApiKey, voiceId: config.elevenlabsVoiceId }) : null;
+
+  const providers: PipelineProviders = {
+    analyst: customProviders?.analyst ?? openaiProvider ?? new FakeAnalystProvider(),
+    mediator: customProviders?.mediator ?? openaiProvider ?? new FakeMediatorProvider(),
+    judge: customProviders?.judge ?? openaiProvider ?? new FakeJudgeStreamProvider(),
+    tts: customProviders?.tts ?? elevenlabsTts ?? new FakeTtsProvider(),
+  };
 
   function getSnapshot(room: RoomData, side: Side): SessionSnapshot {
     return {
@@ -79,10 +117,10 @@ export function createGatewayServer(config: ServerConfig) {
       },
       sessionState: room.sessionState,
       generationId: room.generationId,
-      sharedResult: null,
-      verdictText: null,
-      outcome: null,
-      audioManifest: null,
+      sharedResult: room.sharedResult,
+      verdictText: room.verdictText,
+      outcome: room.outcome,
+      audioManifest: room.audioManifest,
     };
   }
 
@@ -146,6 +184,12 @@ export function createGatewayServer(config: ServerConfig) {
         consent: { A: false, B: false },
         sessionState: "CREATED",
         generationId: null,
+        sharedResult: null,
+        verdictText: null,
+        safetyResult: null,
+        outcome: null,
+        audioManifest: null,
+        audioChunks: new Map(),
         sockets: { A: null, B: null },
       };
 
@@ -304,13 +348,23 @@ export function createGatewayServer(config: ServerConfig) {
         }
 
         if (message.type === "confirm_transcript") {
+          // If already confirmed and trying to change text, reject (FR-005-07)
+          if (boundRoom.confirmed[boundSide]) {
+            if (boundRoom.transcripts[boundSide] === message.payload.text) {
+              // Idempotent repeat
+              ws.send(JSON.stringify(createServerMessage("side_ready", { side: boundSide }, message.requestId)));
+              return;
+            }
+            throw new ZoomOutPublicError("CONFIRMATION_LOCKED", "Transcript is locked for this session. Start a new room to change.");
+          }
+
           const { text, consent } = message.payload;
           boundRoom.transcripts[boundSide] = text;
           boundRoom.confirmed[boundSide] = true;
           boundRoom.consent[boundSide] = consent;
           boundRoom.states[boundSide] = "READY";
 
-          const sideReadyMsg = JSON.stringify(createServerMessage("side_ready", { side: boundSide }));
+          const sideReadyMsg = JSON.stringify(createServerMessage("side_ready", { side: boundSide }, message.requestId));
           boundRoom.sockets.A?.send(sideReadyMsg);
           boundRoom.sockets.B?.send(sideReadyMsg);
 
@@ -319,6 +373,11 @@ export function createGatewayServer(config: ServerConfig) {
             const bothReadyMsg = JSON.stringify(createServerMessage("both_ready", {}));
             boundRoom.sockets.A?.send(bothReadyMsg);
             boundRoom.sockets.B?.send(bothReadyMsg);
+
+            // Execute pipeline asynchronously
+            runOrchestrationPipeline(boundRoom, providers).catch((err) => {
+              console.error("[ZoomOut Orchestrator] Pipeline failed:", err);
+            });
           }
           return;
         }
@@ -327,6 +386,34 @@ export function createGatewayServer(config: ServerConfig) {
           boundRoom.states[boundSide] = "REVIEW";
           boundRoom.transcripts[boundSide] = "";
           ws.send(JSON.stringify(createServerMessage("final_transcript", { text: "" }, message.requestId)));
+          return;
+        }
+
+        if (message.type === "replay_audio") {
+          if (!boundRoom.audioManifest || boundRoom.audioChunks.size === 0) {
+            ws.send(JSON.stringify(createServerMessage("error", {
+              code: "INVALID_STATE",
+              message: "No audio available to replay",
+            }, message.requestId)));
+            return;
+          }
+
+          // Send cached audio chunks in order without re-synthesizing
+          const sortedSeqs = Array.from(boundRoom.audioChunks.keys()).sort((a, b) => a - b);
+          for (const s of sortedSeqs) {
+            const chunk = boundRoom.audioChunks.get(s)!;
+            ws.send(JSON.stringify(createServerMessage("audio_chunk", {
+              seq: chunk.seq,
+              mime: chunk.mime,
+              data: chunk.data,
+              generationId: boundRoom.generationId ?? undefined,
+            })));
+          }
+          ws.send(JSON.stringify(createServerMessage("audio_manifest", boundRoom.audioManifest)));
+          ws.send(JSON.stringify(createServerMessage("done", {
+            outcome: boundRoom.outcome ?? "verdict",
+            generationId: boundRoom.generationId ?? undefined,
+          }, message.requestId)));
           return;
         }
       } catch (err: any) {

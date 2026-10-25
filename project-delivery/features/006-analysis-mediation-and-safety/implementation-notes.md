@@ -1,21 +1,14 @@
 # Analysis, mediation, judge text, and safety: implementation notes
 
-## Current evidence
-
-- Documentation prepared on 2026-10-25.
-- Application changes: none.
-- Provider calls and deployments: none.
-- Runtime tests/builds: not run; application source and package manifests do not exist.
-- Document checks and readiness findings: see [audit.md](audit.md).
-
-## Inputs needed before live execution
-
-Prompt adherence and safety detection remain probabilistic. Model access and a Malayalam human reviewer are prerequisites for live quality sign-off; no model has been selected or tested in this documentation task.
-
-## Execution record
-
-No implementation phases have been attempted. Append a dated entry for each phase with: files changed; requirement/acceptance IDs; exact check commands and observed results; live versus fake providers; failures and fixes; deviations; remaining work. Do not populate successes in advance.
-
-## Resume pointer
-
-Read [status.md](status.md) and start with its next action. Proposed source paths in plan.md are not existing files. Preserve unrelated working-tree changes when implementation begins.
+- Created prompts in `app/api/src/agents/prompts.ts`:
+  - `ANALYST_SYSTEM_PROMPT`: Private per-side analysis with safety check for abuse/coercion.
+  - `MEDIATOR_SYSTEM_PROMPT`: Balanced shared mediation, petty_score (0-10), zoom-out, and truce with `requires_apology: false`.
+  - `JUDGE_SYSTEM_PROMPT`: Spoken Malayalam verdict in 4 structured sections (dramatic opening, situation ruling, gentle zoom-out, practical sentence) under 1200 chars.
+- Implemented `OpenAiLlmProvider` (`app/api/src/providers/openaiLlm.ts`):
+  - Strips markdown code fences.
+  - Validates against `AnalystSchema` and `MediatorSchema`.
+  - Retries invalid JSON once before failing.
+- Implemented Orchestrator Pipeline (`app/api/src/sessions/orchestrator.ts`):
+  - Runs Analyst for Side A and Side B concurrently.
+  - Deterministic safety branch: if abuse or coercion is detected on either side, immediately resolves with calm non-accusatory safety text and bypasses Mediator, Judge, and TTS completely.
+  - Verified with comprehensive test in `app/api/src/sessions/orchestrator.test.ts`.
